@@ -52,7 +52,7 @@ def match_intensity(im0,im1):
     #computes the intensity difference
     C=(im0[valid]*im1[valid]).sum()/(im1[valid]**2).sum()
     return C
-    
+   
 def polyfit2d(f, deg, threshold=100):
     #clean input
     deg = np.asarray(deg)
@@ -76,4 +76,30 @@ def polyfit2d(f, deg, threshold=100):
     #Compute value
     ret=np.dot(vander,c)
     return ret.reshape(initshape)
+    
+def polyfit2d2(f, deg, threshold=100):
+    #clean input
+    deg = np.asarray(deg)
+    f = np.asarray(f)  
+    f = cv2.GaussianBlur(f,(11,11),5)
+    #get x,y
+    x = np.asarray(range(f.shape[1]),dtype='float64')
+    y = np.asarray(range(f.shape[0]),dtype='float64')
+    X = np.array(np.meshgrid(x,y))
+    
+    vecs=(deg[0]+1)*(deg[1]+1)
+    A=np.zeros((vecs,vecs))
+    for yi in range(deg[0]+1):
+        for yj in range(deg[0]+1):
+            for xi in range(deg[1]+1):
+                for xj in range(deg[1]+1):
+                    A[(deg[1]+1)*yi+xi,(deg[1]+1)*yj+xj]=((y**(yi+yj)).sum()*
+                                                          (x**(xi+xj)).sum())
+    
+    #get vander matrix
+    vander = polynomial.polyvander2d(X[0], X[1], deg)               
+    b=(vander*np.tile(f[:,:,np.newaxis],(1,1,vander.shape[2]))).sum(0).sum(0)
+    c=np.linalg.solve(A, b)
+
+    return np.dot(vander,c)
     

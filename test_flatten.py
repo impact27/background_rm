@@ -28,20 +28,21 @@ fns=['UVData/im0.tif']
 fns.append('UVData/ba_e1105qt5_500ms.tif')
 fns.append('UVData/ba_e1105qt5bg2_1000ms.tif')
 imgs=[mpimg.imread(fn) for fn in fns]
-
+    
 
 #%%
-
-    
-    
 im=imgs[0]
 bg=imgs[1]
 
-for i in range(10):
-    sub=bgrm.match_substract(im,bg)
-    div=bgrm.flatten_match(im,bg)
 
-"""
+#%%
+    
+
+
+sub=bgrm.match_substract(im,bg)
+div=bgrm.flatten_match(im,bg)
+
+
 sub=sub[150:,30:-1]
 div=div[150:,30:-1]
 

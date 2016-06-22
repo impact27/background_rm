@@ -31,8 +31,8 @@ def match_substract(im, background):
     #"""
     return data
 
-def flatten_match(im,bg):
-    im=im/polyfit2d(im,[2,2])
+def flatten_match(im,bg, percentile=100):
+    im=im/polyfit2d(im,[2,2],percentile)
     bg=bg/polyfit2d(bg,[2,2])
     #position background on image
     angle, scale, shift, __ = ir.register_images(im,bg)
@@ -53,7 +53,7 @@ def match_intensity(im0,im1):
     C=(im0[valid]*im1[valid]).sum()/(im1[valid]**2).sum()
     return C
    
-def polyfit2d(f, deg, threshold=100):
+def polyfit2d(f, deg, percentile=100):
     #clean input
     deg = np.asarray(deg)
     f = np.asarray(f)  
@@ -70,7 +70,7 @@ def polyfit2d(f, deg, threshold=100):
     vander = vander.reshape((-1,vander.shape[-1]))
     f = f.reshape((vander.shape[0],))
     #get valid values
-    valid=f<np.percentile(f,threshold)
+    valid=f<np.percentile(f,percentile)
     #Find coefficients
     c = np.linalg.lstsq(vander[valid,:], f[valid])[0]
     #Compute value

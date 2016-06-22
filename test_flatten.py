@@ -40,7 +40,7 @@ bg=imgs[1]
 
 
 sub=bgrm.match_substract(im,bg)
-div=bgrm.flatten_match(im,bg)
+div=bgrm.flatten_match(im,bg,90)
 
 
 sub=sub[150:,30:-1]

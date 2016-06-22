@@ -40,6 +40,13 @@ def flatten_match(im,bg, percentile=100):
     bg=ir.rotate_scale(bg,angle,scale, borderValue=np.nan)
     bg=ir.shift_image(bg,shift, borderValue=np.nan)
     
+    #"""
+    from matplotlib.pyplot import figure, plot
+    figure()
+    plot(np.nanmean(im,1))
+    plot(np.nanmean(bg,1))
+    #"""
+    
     return im/bg
     
 def match_intensity(im0,im1):

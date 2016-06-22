@@ -2,7 +2,7 @@
 
 #%%
 import sys
-sys.path.append('../chreg')
+sys.path.append('../image_registration')
 from matplotlib.pyplot import figure, plot, imshow, show,close,semilogy, hold
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -38,7 +38,9 @@ figure()
 imshow(data0)
 data1=match_substract(im1,bg)
 figure()
-imshow(data1)
+imshow(data1,vmin=np.nanmean(data1),vmax=np.nanmax(data1))
+figure()
+imshow(im1-im1.mean(),vmin=np.nanmean(data1),vmax=np.nanmax(data1))
 #%%
 figure()
 p0=np.nanmean(data0,1)

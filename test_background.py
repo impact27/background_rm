@@ -1,83 +1,88 @@
 # -*- coding: utf-8 -*-
 
-#%%
+#%% Imports
 import sys
 sys.path.append('../image_registration')
-from matplotlib.pyplot import figure, plot, imshow, show,close,semilogy, hold
+from matplotlib.pyplot import figure, plot, imshow, show,close,semilogy, hold,colorbar
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import registration.image as ir
 import registration.channel as cr
-from background import match_substract
+import background as rmbg
 import importlib
-#%%
+import cv2
+#%% Reload if changed
 importlib.reload(ir)
 importlib.reload(cr)
+importlib.reload(rmbg)
 
-#%% nload images
+#%% load images
 fns=['UVData/im0.tif']
 fns.append('UVData/ba_e1105qt5_500ms.tif')
 fns.append('UVData/ba_e1105qt5bg2_1000ms.tif')
 imgs=[mpimg.imread(fn) for fn in fns]
 
-#%%
+#%% Plot images
 
 for im in imgs:
     figure()
     imshow(im)
-    
-#%%
 
-#%%
+#%% Remove background
 bg=imgs[1]
 im0=imgs[2]
 im1=imgs[0]
-data0=match_substract(im0,bg)
+
+data0=rmbg.remove_curve_background(im0,bg,percentile=90)
+data1=rmbg.remove_curve_background(im1,bg,percentile=90)
+
+#%% Plot images with background removed
+# im0
 figure()
-imshow(data0)
-data1=match_substract(im1,bg)
+p=imshow(data0,vmin=0,vmax=1)
+colorbar(p)
+#im 1
 figure()
-imshow(data1,vmin=np.nanmean(data1),vmax=np.nanmax(data1))
+p=imshow(data1,vmin=0,vmax=1)
+colorbar(p)
+#im 1 with gaussian filter to remove noise
 figure()
-imshow(im1-im1.mean(),vmin=np.nanmean(data1),vmax=np.nanmax(data1))
+p=imshow(cv2.GaussianBlur(data1,(3,3),1),vmin=0,vmax=1)
+colorbar(p)
+#im1 without processing
+figure()
+p=imshow(im1)
+colorbar(p)
+
 #%%
+from numpy.fft import fft2, fftshift
+figure()
+imshow(np.log(fftshift(abs(fft2(im)))))
+#%% Compare x-mean two images
 figure()
 p0=np.nanmean(data0,1)
 plot(p0[np.isfinite(p0)])
 p1=np.nanmean(data1,1)
 plot(p1[np.isfinite(p1)])
 
-#%%
+#%% Test the usefulness of the percentile
+data1noperc=rmbg.remove_curve_background(im1,bg,percentile=100)
+
 figure()
-plot(im1.mean(1)[np.isfinite(p1)]-im1.mean(1)[np.isfinite(p1)].max())
-plot(p1[np.isfinite(p1)]-np.nanmax(p1))
-#%%
-data0[np.isnan(data0)]=0
-data1[np.isnan(data1)]=0
-a0=ir.orientation_angle(data0)
-a1=ir.orientation_angle(data1)
-print('angle 0:',a0,'angle 1:',a1,' (0 is down)')
+plot(np.nanmean(data1,1))
+plot(np.nanmean(data1noperc,1))
+
+#%% Rough Comparison of Processed and unprocessed images
+figure()
+plot(im1.mean(1)[np.isfinite(p1)]/im1.mean()-1)
+plot(p1[np.isfinite(p1)])
+#%% TEst of not straight image
+im=ir.rotate_scale(im1,np.pi/20,1, borderValue=0)
+figure()
+imshow(im)
 
 #%%
-"""
-
-
-img = cv2.medianBlur(cr.uint8sc(im0),11)
-th3 = cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                            cv2.THRESH_BINARY_INV,101,
-                            np.uint8(np.std(img)))
-kernel=np.ones((5,5))
-#th3= cv2.morphologyEx(th3, cv2.MORPH_OPEN, kernel)
-close(5)
-close(6)
-figure(5)
-plt.hist(img[img>0], 256)
-figure(6)
-imshow(th3)
-figure(7)
-imshow(img)
-imshow(th3, alpha=0.5)
-figure(8)
-imshow(im0)
-#"""
+data=rmbg.remove_curve_background(im,bg,percentile=100,xOrientate=True)
+figure()
+imshow(data)

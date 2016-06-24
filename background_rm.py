@@ -4,20 +4,23 @@ Created on Tue Jun  7 16:13:14 2016
 
 @author: quentinpeter
 """
+import sys
+sys.path.append('../image_registration')
 import registration.image as ir
 import numpy as np
 from numpy.polynomial import polynomial
 import cv2
 
-def remove_curve_background(im,bg,percentile=100,*,xOrientate=False):
+def remove_curve_background(im, bg, percentile=100, *, xOrientate=False,
+                                                                    deg=[2,2]):
     """flatten the image by removing the curve and the background fluorescence. 
     Need to have an image of the background
     """
     #Remove curve from background and image (passing percentile to image)
     #The intensity has arbitraty units. To have the same variance,
     #we need to divide and not subtract
-    im=im/polyfit2d(im,[2,2],percentile)
-    bg=bg/polyfit2d(bg,[2,2])
+    im=im/polyfit2d(im,deg,percentile)#
+    bg=bg/polyfit2d(bg,deg)
     
     angle=None
     if xOrientate:    
@@ -86,7 +89,8 @@ def polyfit2d(f, deg, percentile=100):
     #Compute value
     ret=np.dot(vander,c)
     return ret.reshape(initshape)
-    
+   
+#to use this one, we need to solve the case of a non x-orientated image
 def polyfit2d2(f, deg, yPercentile=100):
     """Fit the function f to the degree deg
     Ignore everithing above yPercentile (mean, ...)
@@ -94,7 +98,7 @@ def polyfit2d2(f, deg, yPercentile=100):
     #clean input
     deg = np.asarray(deg)
     f = np.asarray(f)  
-    f = cv2.GaussianBlur(f,(11,11),5)
+    #f = cv2.GaussianBlur(f,(11,11),5)
     #get x,y
     x = np.asarray(range(f.shape[1]),dtype='float64')
     y = np.asarray(range(f.shape[0]),dtype='float64')
@@ -113,14 +117,12 @@ def polyfit2d2(f, deg, yPercentile=100):
                         (y[yvalid]**(yi+yj)).sum()*(x**(xi+xj)).sum())
     
     #get vander matrix
-    vander = polynomial.polyvander2d(X[0], X[1], deg)               
+    vander = polynomial.polyvander2d(X[1], X[0], deg)    
     b=(vander[yvalid,:,:]*np.tile(f[yvalid,:,np.newaxis],
-                                   (1,1,vander.shape[2]))).sum(0).sum(0)
+            (1,1,vander.shape[2]))).sum(0).sum(0)
     c=np.linalg.solve(A, b)
-
     return np.dot(vander,c)
  
-
 #old version
 #   
 #def match_substract(im, background):

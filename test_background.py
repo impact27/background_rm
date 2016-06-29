@@ -32,6 +32,9 @@ bg=imgs[1]
 im0=imgs[2]
 im1=imgs[0]
 
+#remove noise from background to reduce noise
+#bg=cv2.GaussianBlur(bg,(3,3),1)
+
 data0=rmbg.remove_curve_background(im0,bg,percentile=90)
 data1=rmbg.remove_curve_background(im1,bg,percentile=90)
 
@@ -47,12 +50,26 @@ p=imshow(data1,vmin=0,vmax=1)
 colorbar(p)
 #im 1 with gaussian filter to remove noise
 figure()
-p=imshow(cv2.GaussianBlur(data1,(3,3),1),vmin=-1,vmax=0)
+p=imshow(cv2.GaussianBlur(data1,(3,3),1),vmin=0,vmax=1)
 colorbar(p)
 #im1 without processing
 figure()
 p=imshow(im1)
 colorbar(p)
+
+#%%Compare profile
+for data, im in zip((data0,data1),(im0,im1)):
+    i=np.nanargmax(np.nanmean(data,1))
+    figure()
+    plot(im[i,:]/im.mean(),label = "image +1")
+    plot(data[i,:], label= "extracted")
+    plt.legend()
+
+i1=np.nanargmax(np.nanmean(data1,1))
+figure()
+plot(cv2.GaussianBlur(im1/im1.mean(),(3,3),1)[i1,:],label = "blured image +1")
+plot(cv2.GaussianBlur(data1,(3,3),1)[i1,:], label= "blured extracted")
+plt.legend()
 
 #%% Compare x-mean two images
 figure()

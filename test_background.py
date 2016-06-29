@@ -63,13 +63,15 @@ for data, im in zip((data0,data1),(im0,im1)):
     figure()
     plot(im[i,:]/im.mean(),label = "image +1")
     plot(data[i,:], label= "extracted")
-    plt.legend()
+    plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
+           ncol=2, mode="expand", borderaxespad=0.)
 
 i1=np.nanargmax(np.nanmean(data1,1))
 figure()
 plot(cv2.GaussianBlur(im1/im1.mean(),(3,3),1)[i1,:],label = "blured image +1")
 plot(cv2.GaussianBlur(data1,(3,3),1)[i1,:], label= "blured extracted")
-plt.legend()
+plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
+           ncol=2, mode="expand", borderaxespad=0.)
 
 #%% Compare x-mean two images
 figure()

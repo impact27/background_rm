@@ -4,9 +4,7 @@ Created on Tue Jun  7 16:13:14 2016
 
 @author: quentinpeter
 """
-import sys
-sys.path.append('../image_registration')
-import registration.image as ir
+import image_registration.image as ir
 import numpy as np
 from numpy.polynomial import polynomial
 import cv2

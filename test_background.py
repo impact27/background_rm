@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 
 #%% Imports
-import sys
-sys.path.append('../image_registration')
 from matplotlib.pyplot import figure, plot, imshow, show,close,semilogy, hold,colorbar
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
-import registration.image as ir
-import registration.channel as cr
+import image_registration.image as ir
+import image_registration.channel as cr
 import background_rm as rmbg
 import importlib
 import cv2

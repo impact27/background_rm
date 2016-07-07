@@ -38,7 +38,11 @@ im1=imgs[0]
 data0=rmbg.remove_curve_background(im0,bg,percentile=90)
 data1=rmbg.remove_curve_background(im1,bg,percentile=90)
 
-
+#%%
+figure()
+imshow(rmbg.polyfit2d(im1,[2,2],90))
+figure()
+imshow(rmbg.polyfit2d2(im1,[2,2],90))
 #%% Plot images with background removed
 # im0
 figure()
@@ -95,14 +99,14 @@ plot(im1.mean(1)[np.isfinite(p1)]/im1.mean()-1, label= 'Unprocessed')
 plot(p1[np.isfinite(p1)], label = 'Processed')
 plt.legend()
 #%% TEst of not straight image
-im=ir.rotate_scale(im1,np.pi/20,1, borderValue=0)
+im=ir.rotate_scale(im1,np.pi/20,1, borderValue=np.nan)
 figure()
 imshow(im)
 
-#%%
-data=rmbg.remove_curve_background(im,bg,percentile=100,xOrientate=True)
+#
+data=rmbg.remove_curve_background(im,bg,percentile=90,xOrientate=True)
 figure()
-imshow(data)
+imshow(data,vmin=0,vmax=1)
 
 ##%%
 #fit0=rmbg.polyfit2d(im0,[2,2],90)

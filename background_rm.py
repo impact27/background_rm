@@ -13,8 +13,8 @@ def remove_curve_background(im, bg, percentile=100, *, xOrientate=False,
                                                                     deg=[2,2]):
     """flatten the image by removing the curve and the background fluorescence. 
     Need to have an image of the background
-    TODO: this function takes almost 3 seconds for a single pair of 1000x1000
-    matrices!!! 2.3 of which for folyfit2d! need to optimize that
+    TODO: this function takes almost 2 seconds for a single pair of 1000x1000
+    matrices!!! 1.2 of which for folyfit2d! need to optimize that
     """
     #Remove curve from background and image (passing percentile to image)
     #The intensity has arbitraty units. To have the same variance,
@@ -103,38 +103,26 @@ def polyfit2d(f, deg, percentile=100):
     ret=np.dot(vander,c)
     return ret.reshape(initshape)
    
-
-@profile
 def polyfit2d2(f, deg, Percentile=100):
     """Fit the function f to the degree deg
     Ignore everithing above Percentile (mean, ...)
     """
     #clean input
     deg = np.asarray(deg)
-    f = np.asarray(f,dtype='float64')  
-    #f = cv2.GaussianBlur(f,(11,11),5)
+    f = np.asarray(f,dtype='float32')  
+    f = cv2.GaussianBlur(f,(11,11),5)
     #get x,y
-    x = np.asarray(range(f.shape[1]),dtype='float64')[np.newaxis,:]
-    y = np.asarray(range(f.shape[0]),dtype='float64')[:,np.newaxis]
+    x = np.asarray(range(f.shape[1]),dtype='float32')[np.newaxis,:]
+    y = np.asarray(range(f.shape[0]),dtype='float32')[:,np.newaxis]
     
     valid=f< np.nanpercentile(f,Percentile)
     
     vecs=(deg[0]+1)*(deg[1]+1)
     
-    vandermonde=np.zeros(((deg[0]*2+1),(deg[1]*2+1),*(f.shape)),dtype='float64')
-    for yp in range(deg[0]*2+1):
-        for xp in range(deg[1]*2+1):
-            #There is no clear need to recompute that each time
-            np.dot((y**yp),(x**xp),out=vandermonde[yp,xp,:,:])
-          
-    vanmonvalid=np.dot(vandermonde.reshape((*(vandermonde.shape[:2]),-1)),
-                                              valid.reshape((-1,)))
-    res=vanmonvalid.sum(-1)
-    
-    res=np.zeros(((deg[0]*2+1),(deg[1]*2+1)),dtype='float64')
-    vander=np.zeros((vecs,*(f.shape)),dtype='float64')
+    res=np.zeros(((deg[0]*2+1),(deg[1]*2+1)),dtype='float32')
+    vander=np.zeros((vecs,*(f.shape)),dtype='float32')
     vandervalid=vander.copy()
-    vm=np.zeros(f.shape,dtype='float64')
+    vm=np.zeros(f.shape,dtype='float32')
     vmvalid=vm.copy()
     for yp in range(deg[0]*2+1):
         for xp in range(deg[1]*2+1):
@@ -152,8 +140,19 @@ def polyfit2d2(f, deg, Percentile=100):
             for xi in range(deg[1]+1):
                 for xj in range(deg[1]+1):
                     A[(deg[1]+1)*yi+xi,(deg[1]+1)*yj+xj]=res[yi+yj,xi+xj]
-
-    b=np.dot(np.reshape(vandervalid,(vandervalid.shape[0],-1)),np.reshape(f,(-1,)))
+    
+    d=f.copy()
+    d[np.logical_not(valid)]=0
+    b=np.dot(np.reshape(vandervalid,(vandervalid.shape[0],-1)),np.reshape(d,(-1,)))
     c=np.linalg.solve(A, b)
     return np.dot(np.moveaxis(vander,0,-1),c)
     
+    #    vandermonde=np.zeros(((deg[0]*2+1),(deg[1]*2+1),*(f.shape)),dtype='float64')
+#    for yp in range(deg[0]*2+1):
+#        for xp in range(deg[1]*2+1):
+#            #There is no clear need to recompute that each time
+#            np.dot((y**yp),(x**xp),out=vandermonde[yp,xp,:,:])
+#          
+#    vanmonvalid=np.dot(vandermonde.reshape((*(vandermonde.shape[:2]),-1)),
+#                                              valid.reshape((-1,)))
+#    res=vanmonvalid.sum(-1)

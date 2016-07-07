@@ -40,9 +40,9 @@ data1=rmbg.remove_curve_background(im1,bg,percentile=90)
 
 #%%
 figure()
-imshow(rmbg.polyfit2d(im1,[2,2],90))
-figure()
-imshow(rmbg.polyfit2d2(im1,[2,2],90))
+imshow(rmbg.polyfit2d(im1,[2,2],90)-rmbg.polyfit2d2(im1,[2,2],90))
+colorbar()
+
 #%% Plot images with background removed
 # im0
 figure()

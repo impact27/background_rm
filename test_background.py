@@ -48,18 +48,52 @@ colorbar()
 figure()
 p=imshow(data0,vmin=0,vmax=1)
 colorbar(p)
+figure()
+p=imshow(cv2.GaussianBlur(data0,(3,3),1),vmin=0,vmax=1)
+colorbar(p)
+
+#%%
+m=np.nanargmax(np.nanmean(data1,1))
+d=100
+
 #im 1
 figure()
-p=imshow(data1,vmin=0,vmax=1)
-colorbar(p)
+p=imshow(data1[m-d:m+d,:],vmin=0,vmax=1)
+plt.imsave("Processed.png",data1[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
+#colorbar(p,orientation="horizontal")
 #im 1 with gaussian filter to remove noise
 figure()
-p=imshow(cv2.GaussianBlur(data1,(3,3),1),vmin=0,vmax=1)
-colorbar(p)
+p=imshow(cv2.GaussianBlur(data1,(3,3),1)[m-d:m+d,:],vmin=0,vmax=1)
+plt.imsave("ProcessedBlur.png",cv2.GaussianBlur(data1,(3,3),1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
+#colorbar(p)
 #im1 without processing
 figure()
-p=imshow(im1)
-colorbar(p)
+p=imshow((im1/im1.mean()-1)[m-d:m+d,:],vmin=0,vmax=1)
+plt.imsave("Original.png",(im1/im1.mean()-1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
+#colorbar(p)
+
+#im1 without processing
+figure()
+p=imshow(cv2.GaussianBlur(im1/im1.mean()-1,(3,3),1)[m-d:m+d,:],vmin=0,vmax=1)
+plt.imsave("OriginalBlur.png",cv2.GaussianBlur(im1/im1.mean()-1,(3,3),1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
+#colorbar(p)
+
+#%%
+vmin=-.3
+vmax=1
+
+image=im1/im1.mean()-1
+
+figure()
+imshow(image,vmin=vmin,vmax=vmax)
+plt.imsave("OriginalPoly.png",image,vmin=vmin,vmax=vmax)
+
+
+image=rmbg.polyfit2d(image)
+
+figure()
+imshow(image,vmin=vmin,vmax=vmax)
+plt.imsave("PolyFit.png",image,vmin=vmin,vmax=vmax)
 
 #%%Compare profile
 for data, im in zip((data0,data1),(im0,im1)):

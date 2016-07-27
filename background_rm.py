@@ -75,7 +75,7 @@ def same_size(im0,im1):
     
     return im0,im1
    
-def polyfit2d(f, deg, percentile=100):
+def polyfit2d(f, deg=[2,2], percentile=100):
     """Fit the function f to the degree deg
     Ignore everithing above percentile
     This is kind of wrong as y^2 * x^2 is not 2nd degree...
@@ -103,7 +103,7 @@ def polyfit2d(f, deg, percentile=100):
     ret=np.dot(vander,c)
     return ret.reshape(initshape)
    
-def polyfit2d2(f, deg, Percentile=100):
+def polyfit2d2(f, deg=[2,2], Percentile=100):
     """Fit the function f to the degree deg
     Ignore everithing above Percentile (mean, ...)
     """

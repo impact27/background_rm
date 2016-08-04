@@ -22,10 +22,12 @@ fns.append('UVData/ba_e1105qt5bg2_1000ms.tif')
 imgs=[mpimg.imread(fn) for fn in fns]
 
 #%% Plot images
-
+#"""
 for im in imgs:
     figure()
     imshow(im)
+    colorbar()
+#"""
 
 #%% Remove background
 bg=imgs[1]
@@ -35,8 +37,8 @@ im1=imgs[0]
 #remove noise from background to reduce noise
 #bg=cv2.GaussianBlur(bg,(3,3),1)
 
-data0=rmbg.remove_curve_background(im0,bg,percentile=90)
-data1=rmbg.remove_curve_background(im1,bg,percentile=90)
+data0=rmbg.remove_curve_background(im0,bg)
+data1=rmbg.remove_curve_background(im1,bg)
 
 #%%
 figure()
@@ -59,23 +61,23 @@ d=100
 #im 1
 figure()
 p=imshow(data1[m-d:m+d,:],vmin=0,vmax=1)
-plt.imsave("Processed.png",data1[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
+#plt.imsave("Processed.png",data1[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
 #colorbar(p,orientation="horizontal")
 #im 1 with gaussian filter to remove noise
 figure()
 p=imshow(cv2.GaussianBlur(data1,(3,3),1)[m-d:m+d,:],vmin=0,vmax=1)
-plt.imsave("ProcessedBlur.png",cv2.GaussianBlur(data1,(3,3),1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
+#plt.imsave("ProcessedBlur.png",cv2.GaussianBlur(data1,(3,3),1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
 #colorbar(p)
 #im1 without processing
 figure()
 p=imshow((im1/im1.mean()-1)[m-d:m+d,:],vmin=0,vmax=1)
-plt.imsave("Original.png",(im1/im1.mean()-1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
+#plt.imsave("Original.png",(im1/im1.mean()-1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
 #colorbar(p)
 
 #im1 without processing
 figure()
 p=imshow(cv2.GaussianBlur(im1/im1.mean()-1,(3,3),1)[m-d:m+d,:],vmin=0,vmax=1)
-plt.imsave("OriginalBlur.png",cv2.GaussianBlur(im1/im1.mean()-1,(3,3),1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
+#plt.imsave("OriginalBlur.png",cv2.GaussianBlur(im1/im1.mean()-1,(3,3),1)[m-d:m+d,:],dpi=100,vmin=0,vmax=1)
 #colorbar(p)
 
 #%%
@@ -86,14 +88,14 @@ image=im1/im1.mean()-1
 
 figure()
 imshow(image,vmin=vmin,vmax=vmax)
-plt.imsave("OriginalPoly.png",image,vmin=vmin,vmax=vmax)
+#plt.imsave("OriginalPoly.png",image,vmin=vmin,vmax=vmax)
 
 
 image=rmbg.polyfit2d(image)
 
 figure()
 imshow(image,vmin=vmin,vmax=vmax)
-plt.imsave("PolyFit.png",image,vmin=vmin,vmax=vmax)
+#plt.imsave("PolyFit.png",image,vmin=vmin,vmax=vmax)
 
 #%%Compare profile
 for data, im in zip((data0,data1),(im0,im1)):
@@ -111,6 +113,21 @@ plot(cv2.GaussianBlur(data1,(3,3),1)[i1,:], label= "blured extracted")
 plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
            ncol=2, mode="expand", borderaxespad=0.)
 
+#%%
+figure()
+d=10
+m=np.nanmean(data1[i1-d:i1+d,:])
+plot(cv2.GaussianBlur(data1,(3,3),1)[i1-d:i1+d,:1000].mean(0),'b', label= "Processed")
+plot(np.ones((1000,))*m,'r--')
+plot((im1/im1.mean())[i1-d:i1+d,:1000].mean(0)-0.5,'g',label = "Raw +.5")
+plot(np.ones((1000,))*m+0.5,'r--')
+
+plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
+           ncol=2, mode="expand", borderaxespad=0.)
+
+plt.xlabel('position')
+plt.ylabel('intensity')
+
 #%% Compare x-mean two images
 figure()
 p0=np.nanmean(data0,1)
@@ -121,10 +138,13 @@ plt.legend()
 
 #%% Test the usefulness of the percentile
 data1noperc=rmbg.remove_curve_background(im1,bg,percentile=100)
+data1none=rmbg.remove_curve_background(im1,bg,percentile=95)
 
 figure()
 plot(np.nanmean(data1,1), label = 'With percentile')
 plot(np.nanmean(data1noperc,1), label = 'Without percentile')
+plot(np.nanmean(data1none,1), label = '95')
+plot(np.zeros(np.nanmean(data1,1).shape))
 plt.legend()
 
 #%% Rough Comparison of Processed and unprocessed images

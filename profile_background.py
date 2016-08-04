@@ -12,4 +12,4 @@ imgs=[mpimg.imread(fn) for fn in fns]
 
 #%%
 for i in range(10):
-    rmbg.remove_curve_background(imgs[1],imgs[0],90)
+    rmbg.remove_curve_background(imgs[1],imgs[0],None)

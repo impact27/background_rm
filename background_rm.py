@@ -9,7 +9,7 @@ import numpy as np
 from numpy.polynomial import polynomial
 import cv2
 
-def remove_curve_background(im, bg, percentile=100, *, xOrientate=False,
+def remove_curve_background(im, bg, percentile=None, *, xOrientate=False,
                                                                     deg=[2,2]):
     """flatten the image by removing the curve and the background fluorescence. 
     Need to have an image of the background
@@ -20,7 +20,7 @@ def remove_curve_background(im, bg, percentile=100, *, xOrientate=False,
     #The intensity has arbitraty units. To have the same variance,
     #we need to divide and not subtract
     im=im/polyfit2d2(im,deg,percentile)#
-    bg=bg/polyfit2d2(bg,deg)
+    bg=bg/polyfit2d2(bg,deg,100)
     
     #if the image or the background have any nans, replace by 1 (for fft)
     nanim=np.isnan(im)
@@ -83,7 +83,7 @@ def polyfit2d(f, deg=[2,2], percentile=100):
     #clean input
     deg = np.asarray(deg)
     f = np.asarray(f)  
-    f = cv2.GaussianBlur(f,(11,11),5)
+    f = cv2.GaussianBlur(f,(11,11),0)
     #get x,y
     x = np.asarray(range(f.shape[1]))
     y = np.asarray(range(f.shape[0]))
@@ -103,19 +103,41 @@ def polyfit2d(f, deg=[2,2], percentile=100):
     ret=np.dot(vander,c)
     return ret.reshape(initshape)
    
-def polyfit2d2(f, deg=[2,2], Percentile=100):
+   
+def polyfit2d2(f, deg=[2,2], Percentile=None):
     """Fit the function f to the degree deg
     Ignore everithing above Percentile (mean, ...)
     """
     #clean input
     deg = np.asarray(deg)
     f = np.asarray(f,dtype='float32')  
-    f = cv2.GaussianBlur(f,(11,11),5)
+    
     #get x,y
     x = np.asarray(range(f.shape[1]),dtype='float32')[np.newaxis,:]
     y = np.asarray(range(f.shape[0]),dtype='float32')[:,np.newaxis]
     
-    valid=f< np.nanpercentile(f,Percentile)
+    if Percentile is None:
+        #take mean
+        m=np.nanmean(f)
+        #std everithing below mean
+        std=np.sqrt(((m-f[f<m])**2).mean())
+        #3 std should be good
+        valid=f<m+3*std
+        #remove dots in proteins (3px dots)
+        valid=cv2.erode(np.asarray(valid,dtype="uint8"),np.ones((7,7)))
+        #remove dots in background (2 px dots)
+        valid=cv2.dilate(valid,np.ones((11,11)))
+        #widen proteins (10 px around proteins)
+        valid=cv2.erode(valid,np.ones((21,21)))
+        #If invalid values in f, get rid of them
+        valid=np.logical_and(valid,np.isfinite(f))
+        
+    else:
+        #compare percentile with blured version
+        f = cv2.GaussianBlur(f,(11,11),0)
+        valid=f< np.nanpercentile(f,Percentile)
+    
+    
     
     vecs=(deg[0]+1)*(deg[1]+1)
     

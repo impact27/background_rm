@@ -1,5 +1,23 @@
 # -*- coding: utf-8 -*-
+"""
+Test with some images 
 
+Copyright (C) 2016  Quentin Peter
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""
 #%% Imports
 from matplotlib.pyplot import figure, plot, imshow, show,close,semilogy, hold,colorbar
 import matplotlib.pyplot as plt
@@ -42,7 +60,7 @@ data1=rmbg.remove_curve_background(im1,bg)
 
 #%%
 figure()
-imshow(rmbg.polyfit2d(im1,[2,2],90)-rmbg.polyfit2d2(im1,[2,2],90))
+imshow(rmbg.polyfit2d(im1,[2,2],90)-rmbg.polyfit2d_alt(im1,[2,2],90))
 colorbar()
 
 #%% Plot images with background removed
@@ -137,13 +155,16 @@ plot(p1[np.isfinite(p1)], label = 'image 1')
 plt.legend()
 
 #%% Test the usefulness of the percentile
-data1noperc=rmbg.remove_curve_background(im1,bg,percentile=100)
-data1none=rmbg.remove_curve_background(im1,bg,percentile=95)
+data1=rmbg.remove_curve_background(im1,bg)
+data1100=rmbg.remove_curve_background(im1,bg,percentile=100)
+data195=rmbg.remove_curve_background(im1,bg,percentile=95)
+data12p=rmbg.remove_curve_background(im1,bg,twoPass=True)
 
 figure()
 plot(np.nanmean(data1,1), label = 'With percentile')
-plot(np.nanmean(data1noperc,1), label = 'Without percentile')
-plot(np.nanmean(data1none,1), label = '95')
+plot(np.nanmean(data1100,1), label = 'Without percentile')
+plot(np.nanmean(data195,1), label = '95')
+plot(np.nanmean(data12p,1), label = '2pass')
 plot(np.zeros(np.nanmean(data1,1).shape))
 plt.legend()
 

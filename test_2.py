@@ -52,4 +52,3 @@ plot(np.zeros(np.nanmean(d,1).shape))
 plt.legend()
 
 
-

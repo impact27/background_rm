@@ -28,6 +28,10 @@ import background_rm as rmbg
 import importlib
 import cv2
 from scipy.ndimage.interpolation import rotate,zoom
+#%%
+importlib.reload(ir)
+importlib.reload(rmbg)
+
 
 #%% load images
 fns=['UVData/im0.tif']
@@ -41,21 +45,28 @@ im=imgs[0]
 
 im=ir.rotate_scale(im,np.pi/12,0.8)
 data=rmbg.remove_curve_background(im,bg)
+
+#%%
 odata=rmbg.remove_curve_background(im,bg,xOrientate=True)
+
 
 figure(0)
 imshow(im)
+#plt.imsave("im.png",im)
 
 iim=rmbg.polyfit2d(im)
 figure(1)
 imshow(iim,vmin=im.min(),vmax=im.max())
+#plt.imsave("iim.png",iim,vmin=im.min(),vmax=im.max())
 
 figure(2)
 imshow(bg)
+#plt.imsave("bg.png",bg)
 
-ibg=rmbg.polyfit2d(bg,Percentile=100)
+ibg=rmbg.polyfit2d(bg,percentile=100)
 figure(3)
 imshow(ibg,vmin=bg.min(),vmax=bg.max())
+#plt.imsave("ibg.png",ibg,vmin=bg.min(),vmax=bg.max())
 
 im=im/iim
 bg=bg/ibg
@@ -73,11 +84,14 @@ figure(4)
 imshow(bg)
 imshow(im,extent=ir.get_extent(-np.asarray(shift)+(np.asarray(bg.shape)-np.asarray(im.shape))/2, im.shape))
 plt.autoscale()
+#plt.savefig("superposed.png")
 
 #%%
 
 figure(5)
-imshow(data)
+imshow(data,vmin=0)
+#plt.imsave("result.png",data,vmin=0)
 figure(6)
-imshow(odata)
+imshow(odata,vmin=0)
+#plt.imsave("oresult.png",odata,vmin=0)
 

@@ -72,6 +72,8 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     #make FFT calculations on background and image
     if xOrientate:    
         angleOri=ir.orientation_angle(im)
+        
+    #get angle scale and shift
     angle, scale, shift, __ = ir.register_images(im,bg)
     
     #remobe the previously added nans
@@ -79,8 +81,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     bg[nanbg]=np.nan
     
     #move background
-    bg=ir.rotate_scale(bg,angle,scale, borderValue=np.nan)
-    bg=ir.shift_image(bg,shift, borderValue=np.nan)
+    bg=ir.rotate_scale_shift(bg,angle,scale,shift, borderValue=np.nan)
     
     #resize if shape is not equal
     if im.shape is not bg.shape:

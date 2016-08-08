@@ -27,8 +27,8 @@ from numpy.polynomial import polynomial
 import cv2
 from scipy.special import erfinv
 
-def remove_curve_background(im, bg, percentile=None, deg=[2,2], *, 
-                            xOrientate=False, twoPass=False,threePass=False):
+def remove_curve_background(im, bg, percentile=None, deg=2, *, 
+                            xOrientate=False, twoPass=False):
     """flatten the image by removing the curve and the background fluorescence. 
     
     Parameters
@@ -91,11 +91,6 @@ def remove_curve_background(im, bg, percentile=None, deg=[2,2], *,
     
     #If 2 pass, get flatter image and resubtract
     if twoPass:
-        mask=getValid(cv2.GaussianBlur(data,(21,21),0))
-        im=im/polyfit2d(im,deg,mask=mask)
-        data=im-bg
-        
-    if threePass:
         mask=getValid(cv2.GaussianBlur(data,(21,21),0))
         im=im/polyfit2d(im,deg,mask=mask)
         data=im-bg
@@ -181,18 +176,19 @@ def getValid(im, r=2):
     #"""
     return valid
    
-def polyfit2d(im, deg=[2,2], Percentile=None, mask=None):
+def polyfit2d(im, deg=2, percentile=None, mask=None):
     """Fit the function f to the degree deg
     
     Parameters
     ----------
     im: 2d array
         The image to fit
-    deg: 2 numbers, defaults [2,2]
-        The Y and X polynomial degrees to fit
-    Percentile: number, optional
+    deg: integer, default 2
+        The polynomial degree to fit
+    percentile: number (0-100), optional
         The percentage of the image covered by the background
-        If None, the script uses morphological functions to find the proteins
+    mask: 2d boolean array
+        Alternative to percentile, valid values
     
     Returns
     -------
@@ -201,12 +197,35 @@ def polyfit2d(im, deg=[2,2], Percentile=None, mask=None):
         
     Notes
     -----
-    Ignore everithing above Percentile (mean, ...)
+    To do a least square of the image, we need to minimize sumOverPixels (SOP)
+    ((fit-image)**2)
+    Where fit is a function of C_ij:
+        fit=sum_ij(C_ij * y**i * x**j)
+       
+    we define the Vandermonde matrix as follow:
+        V[i,j]=y**i * x**j
+        
+    where x and y are meshgrid of the y and x index
+    
+    So we want the derivate of SOP((fit-image)**2) relative to the C_ij
+    to be 0.
+    
+        d/dCij SOP((fit-image)**2) = 0 = 2*SOP((fit-image)*d/dC_ij fit)
+    
+    Therefore
+    
+        SOP(sum_kl(C_kl * V[k+i,l+j]))=SOP(image*V[i,j])
+        sum_kl(C_kl * SOP(V[k+i,l+j]))=SOP(image*V[i,j])
+    
+    Which is a simple matrix equation! A*C=B with A.size=(I+J)*(I+J),
+    C.size=B.size=I+J
+        
+    The sizes of the matrices are only of the order of deg**4
+    
+    The bottleneck is any operation on the images before the SOP 
     """
     #clean input
-    deg = np.asarray(deg)
     im = np.asarray(im,dtype='float32')  
-    
     
     #get x,y
     x = np.asarray(range(im.shape[1]),dtype='float32')[np.newaxis,:]
@@ -215,52 +234,64 @@ def polyfit2d(im, deg=[2,2], Percentile=None, mask=None):
     if mask is not None:
         valid=mask
                      
-    elif Percentile is not None:
-        im = cv2.GaussianBlur(im,(11,11),0)
+    elif percentile is not None:
         #compare percentile with blured version
-        valid=im< np.nanpercentile(im,Percentile)
+        valid=im< np.nanpercentile(im,percentile)
         
     else:
-        #im = cv2.GaussianBlur(im,(3,3),0)
+        #Some fallback function
         valid=getValid(im)
-        
     
-    #"""
-    if Percentile is not 100:
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.imshow(valid)
-    #"""
+    #Number of x and y power combinations
+    psize=((deg+1)*(deg+2))//2
+    #This will hold the sum of the vandermonde matrix, 
+    #square instead of shape(psize) for readibility.
+    #This will therefore be a upper triangular matrix
+    SOPV=np.zeros(((deg*2+1),(deg*2+1)),dtype='float32')
+    #vandermonde matrix
+    vander=np.zeros((psize,*(im.shape)),dtype='float32')
+    #vandermonde matrix with all masked values =0
+    vandermasked=vander.copy()
+    #Temp. matrix that will hold the current value of vandermonde
+    vtmp=np.zeros(im.shape,dtype='float32')
+    #idem but with 0 on masked pixels
+    vtmpmasked=vtmp.copy()
     
-    vecs=(deg[0]+1)*(deg[1]+1)
-    
-    res=np.zeros(((deg[0]*2+1),(deg[1]*2+1)),dtype='float32')
-    vander=np.zeros((vecs,*(im.shape)),dtype='float32')
-    vandervalid=vander.copy()
-    vm=np.zeros(im.shape,dtype='float32')
-    vmvalid=vm.copy()
-    for yp in range(deg[0]*2+1):
-        for xp in range(deg[1]*2+1):
+    #function to order powers in psize
+    def getidx(y,x):
+        return ((2*(deg+1)+1)*y-y**2)//2+x
+
+    #First thing is to compute the vandermonde matrix
+    for yp in range(deg*2+1):
+        for xp in range(deg*2+1-yp):
             #There is no clear need to recompute that each time
-            np.dot((y**yp),(x**xp),out=vm)
-            np.multiply(vm,valid,out=vmvalid)
-            res[yp,xp]=(vmvalid).sum()
-            if yp<deg[0]+1 and xp <deg[1]+1:
-                vander[(deg[0]+1)*yp+xp,:,:]=vm
-                vandervalid[(deg[0]+1)*yp+xp,:,:]=vmvalid
+            np.dot((y**yp),(x**xp),out=vtmp)
+            np.multiply(vtmp,valid,out=vtmpmasked)
+            SOPV[yp,xp]=(vtmpmasked).sum()
+            if yp<deg+1 and xp <deg+1-yp:
+                vander[getidx(yp,xp),:,:]=vtmp
+                vandermasked[getidx(yp,xp),:,:]=vtmpmasked
     
-    A=np.zeros((vecs,vecs),dtype='float64')
-    for yi in range(deg[0]+1):
-        for yj in range(deg[0]+1):
-            for xi in range(deg[1]+1):
-                for xj in range(deg[1]+1):
-                    A[(deg[1]+1)*yi+xi,(deg[1]+1)*yj+xj]=res[yi+yj,xi+xj]
+    #Then compute the LHS of the least square equation
+    A=np.zeros((psize,psize),dtype='float64')
+    for yi in range(deg+1):
+        for yj in range(deg+1):
+            for xi in range(deg+1-yi):
+                for xj in range(deg+1-yj):
+                    A[getidx(yi,xi),getidx(yj,xj)]=SOPV[yi+yj,xi+xj]
     
+    #Set everithing invalid to 0 (as x*0 =0 works for any x)
     d=im.copy()
     d[np.logical_not(valid)]=0
-    b=np.dot(np.reshape(vandervalid,(vandervalid.shape[0],-1)),
+
+    #Get the RHS of the least square equation
+    b=np.dot(np.reshape(vandermasked,(vandermasked.shape[0],-1)),
              np.reshape(d,(-1,)))
+    
+    #Solve
     c=np.linalg.solve(A, b)
+    
+    #Multiply the coefficient with the vandermonde matrix to find the result
     return np.dot(np.moveaxis(vander,0,-1),c)
     
 def polyfit2d_alt(im, deg=[2,2], percentile=100):
@@ -272,7 +303,7 @@ def polyfit2d_alt(im, deg=[2,2], percentile=100):
         The image to fit
     deg: 2 numbers, defaults [2,2]
         The Y and X polynomial degrees to fit
-    Percentile: number, optional
+    percentile: number, optional
         The percentage of the image covered by the background
     
     Returns

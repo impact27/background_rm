@@ -139,11 +139,25 @@ def same_size(im0,im1):
     return im0,im1
    
 def getValid(im, r=2):
+    """Tries to extract the valid values of the image
+    
+    Parameters
+    ----------
+    im: 2d array
+        The image
+    r: uint
+        The radius used to fill the gaps
+        
+    Returns
+    -------
+    valid: 2d array
+        the valid mask
+    
+    """
     
     #take mode
     immin=np.nanmin(im)
     immax=np.nanmax(im)
-    #hist = cv2.calcHist([f[np.isfinite(f)]],[0],None,[1000],[fmin,fmax])
     hist,*_= np.histogram(im[np.isfinite(im)],1000,[immin,immax])
     m=hist[1:-1].argmax()+1#don't want saturated values
     hm=m

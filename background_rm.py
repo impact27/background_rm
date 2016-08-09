@@ -262,15 +262,15 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     #This will hold the sum of the vandermonde matrix, 
     #square instead of shape(psize) for readibility.
     #This will therefore be a upper triangular matrix
-    SOPV=np.zeros(((deg*2+1),(deg*2+1)),dtype='float32')
+    SOPV=np.empty(((deg*2+1),(deg*2+1)),dtype='float32')
     #vandermonde matrix
-    vander=np.zeros((psize,*(im.shape)),dtype='float32')
+    vander=np.empty((psize,*(im.shape)),dtype='float32')
     #vandermonde matrix with all masked values =0
-    vandermasked=vander.copy()
+    vandermasked=np.empty((psize,*(im.shape)),dtype='float32')
     #Temp. matrix that will hold the current value of vandermonde
-    vtmp=np.zeros(im.shape,dtype='float32')
+    vtmp=np.empty(im.shape,dtype='float32')
     #idem but with 0 on masked pixels
-    vtmpmasked=vtmp.copy()
+    vtmpmasked=np.empty(im.shape,dtype='float32')
     
     #function to order powers in psize
     def getidx(y,x):
@@ -288,7 +288,7 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
                 vandermasked[getidx(yp,xp),:,:]=vtmpmasked
     
     #Then compute the LHS of the least square equation
-    A=np.zeros((psize,psize),dtype='float64')
+    A=np.zeros((psize,psize),dtype='float32')
     for yi in range(deg+1):
         for yj in range(deg+1):
             for xi in range(deg+1-yi):
@@ -305,7 +305,6 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     
     #Solve
     c=np.linalg.solve(A, b)
-    
     #Multiply the coefficient with the vandermonde matrix to find the result
     return np.dot(np.moveaxis(vander,0,-1),c)
     

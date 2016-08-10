@@ -25,7 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ##############REPLACE NAMES HERE############################
 backgroundfn='/Users/quentinpeter/Desktop/bg_resistance.tif'
-imagefn='/Users/quentinpeter/Desktop/6p4uM_ovalbumin_resistance.tif'
+imagefn='/Users/quentinpeter/Desktop/25uM_Transferrin_resistance.tif'
 outputfn='output.tif'
 
 #the percentile is the approximate area of the image covered by background
@@ -51,5 +51,5 @@ if blur:
     output=cv2.GaussianBlur(output,(3,3),0)
     
 #save image 
-outim = Image.fromarray(output)
+outim = Image.fromarray(output,'L')
 outim.save(outputfn)

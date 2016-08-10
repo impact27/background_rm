@@ -28,6 +28,7 @@ import image_registration.channel as cr
 import background_rm as rmbg
 import importlib
 import cv2
+import warnings
 #%% Reload if changed
 importlib.reload(ir)
 importlib.reload(cr)
@@ -73,7 +74,9 @@ p=imshow(cv2.GaussianBlur(data0,(3,3),1),vmin=0,vmax=1)
 colorbar(p)
 
 #%%
-m=np.nanargmax(np.nanmean(data1,1))
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    m=np.nanargmax(np.nanmean(data1,1))
 d=100
 
 #im 1
@@ -117,14 +120,17 @@ imshow(image,vmin=vmin,vmax=vmax)
 
 #%%Compare profile
 for data, im in zip((data0,data1),(im0,im1)):
-    i=np.nanargmax(np.nanmean(data,1))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        i=np.nanargmax(np.nanmean(data,1))
     figure()
     plot(im[i,:]/im.mean(),label = "image +1")
     plot(data[i,:], label= "extracted")
     plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
            ncol=2, mode="expand", borderaxespad=0.)
-
-i1=np.nanargmax(np.nanmean(data1,1))
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    i1=np.nanargmax(np.nanmean(data1,1))
 figure()
 plot(cv2.GaussianBlur(im1/im1.mean(),(3,3),1)[i1,:],label = "blured image +1")
 plot(cv2.GaussianBlur(data1,(3,3),1)[i1,:], label= "blured extracted")
@@ -134,7 +140,9 @@ plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
 #%%
 figure()
 d=10
-m=np.nanmean(data1[i1-d:i1+d,:])
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    m=np.nanmean(data1[i1-d:i1+d,:])
 plot(cv2.GaussianBlur(data1,(3,3),1)[i1-d:i1+d,:1000].mean(0),'b', label= "Processed")
 plot(np.ones((1000,))*m,'r--')
 plot((im1/im1.mean())[i1-d:i1+d,:1000].mean(0)-0.5,'g',label = "Raw +.5")
@@ -147,12 +155,14 @@ plt.xlabel('position')
 plt.ylabel('intensity')
 
 #%% Compare x-mean two images
-figure()
-p0=np.nanmean(data0,1)
-plot(p0[np.isfinite(p0)],label='image 0')
-p1=np.nanmean(data1,1)
-plot(p1[np.isfinite(p1)], label = 'image 1')
-plt.legend()
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    figure()
+    p0=np.nanmean(data0,1)
+    plot(p0[np.isfinite(p0)],label='image 0')
+    p1=np.nanmean(data1,1)
+    plot(p1[np.isfinite(p1)], label = 'image 1')
+    plt.legend()
 
 #%% Test the usefulness of the percentile
 data1=rmbg.remove_curve_background(im1,bg)
@@ -160,13 +170,15 @@ data1100=rmbg.remove_curve_background(im1,bg,percentile=100)
 data195=rmbg.remove_curve_background(im1,bg,percentile=95)
 data12p=rmbg.remove_curve_background(im1,bg,twoPass=True)
 
-figure()
-plot(np.nanmean(data1,1), label = 'With percentile')
-plot(np.nanmean(data1100,1), label = 'Without percentile')
-plot(np.nanmean(data195,1), label = '95')
-plot(np.nanmean(data12p,1), label = '2pass')
-plot(np.zeros(np.nanmean(data1,1).shape))
-plt.legend()
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    figure()
+    plot(np.nanmean(data1,1), label = 'With percentile')
+    plot(np.nanmean(data1100,1), label = 'Without percentile')
+    plot(np.nanmean(data195,1), label = '95')
+    plot(np.nanmean(data12p,1), label = '2pass')
+    plot(np.zeros(np.nanmean(data1,1).shape))
+    plt.legend()
 
 #%% Rough Comparison of Processed and unprocessed images
 figure()

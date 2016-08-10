@@ -24,13 +24,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 ##############REPLACE NAMES HERE############################
-backgroundfn='/Users/quentinpeter/Desktop/bg_resistance.tif'
+#image name goes through glob => use * if you want
 imagefn='/Users/quentinpeter/Desktop/25uM_Transferrin_resistance.tif'
-outputfn='output.tif'
+backgroundfn='/Users/quentinpeter/Desktop/bg_resistance.tif'
+outputfn='output'
 
 #the percentile is the approximate area of the image covered by background
 percentile=None
 blur=False
+xOrientate=True
+twoPass=True
 ############################################################
 
 #imports everithing needed
@@ -38,18 +41,41 @@ import matplotlib.image as mpimg
 import background_rm as rmbg
 from PIL import Image
 import cv2
+from glob import glob
+import numpy as np
+
+def printInfo(d,m):
+    print('mean',d[m].mean(),
+          'std',d[m].std(),
+          'std/SQRT(N)',d[m].std()/np.sqrt(m.sum()))
 
 #load images
 bg=mpimg.imread(backgroundfn)
-im=mpimg.imread(imagefn)
+imgs=[mpimg.imread(fn) for fn in glob(imagefn)]
 
-#remove background
-output=rmbg.remove_curve_background(im,bg,percentile=percentile)
-
-#blur if asked
-if blur:
-    output=cv2.GaussianBlur(output,(3,3),0)
+for i, im in enumerate(imgs):
+    #remove background
+    output=rmbg.remove_curve_background(im,bg,percentile=percentile, 
+                                        xOrientate=xOrientate, twoPass=twoPass)
     
-#save image 
-outim = Image.fromarray(output,'L')
-outim.save(outputfn)
+    #blur if asked
+    if blur:
+        output=cv2.GaussianBlur(output,(3,3),0)
+        
+    #save image 
+    outim = Image.fromarray(output,'F')
+    outim.save(outputfn+str(i)+'.tif')
+    
+    sm=rmbg.signalMask(output,10,True)
+    bm=rmbg.backgroundMask(output,10,True)
+    
+    print('Signal '+str(i))
+    printInfo(output,sm)
+    print('Background '+str(i))
+    printInfo(output,bm)
+    
+  
+
+
+
+

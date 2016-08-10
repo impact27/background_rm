@@ -26,6 +26,7 @@ import numpy as np
 from numpy.polynomial import polynomial
 import cv2
 from scipy.special import erfinv
+import warnings
 
 def remove_curve_background(im, bg, percentile=None, deg=2, *, 
                             xOrientate=False, twoPass=False):
@@ -57,11 +58,16 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     TODO: this function takes almost 2 seconds for a single pair of 1000x1000
     matrices!!! 1.2 of which for folyfit2d! need to optimize that
     """
+    
+    mask=None
+    if percentile is None:
+        mask=backgroundMask(im)
+        
     #Remove curve from background and image (passing percentile to image)
     #The intensity has arbitraty units. To have the same variance,
-    #we need to divide and not subtract
-    im=im/polyfit2d(im,deg,percentile)#
-    bg=bg/polyfit2d(bg,deg,100)
+    #we need to divide and not subtract   
+    im=im/polyfit2d(im,deg,percentile, mask=mask)#
+    bg=bg/polyfit2d(bg,deg)
     
     #if the image or the background have any nans, replace by 1 (for fft)
     nanim=np.isnan(im)
@@ -92,7 +98,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     
     #If 2 pass, get flatter image and resubtract
     if twoPass:
-        mask=getValid(cv2.GaussianBlur(data,(21,21),0))
+        mask=backgroundMask(data,im.shape[0]//100,blur=True)
         im=im/polyfit2d(im,deg,mask=mask)
         data=im-bg
                
@@ -138,9 +144,58 @@ def same_size(im0,im1):
                                 borderType=cv2.BORDER_CONSTANT, value=np.nan)
     
     return im0,im1
-   
-def getValid(im, r=2):
-    """Tries to extract the valid values of the image
+
+    
+def backgroundTreshold(im):
+    """get a threshold to remove background
+    
+    Parameters
+    ----------
+    im: 2d array
+        The image
+        
+    Returns
+    -------
+    threshold: number
+        the threshold
+    
+    """
+    #take mode
+    
+    immin=np.nanmin(im)
+    immax=np.nanmax(im)
+    hist,*_= np.histogram(im[np.isfinite(im)],1000,[immin,immax])
+    m=hist[1:-1].argmax()+1#don't want saturated values
+    hm=m
+    m=m*(immax-immin)/1000+immin
+    #if hist 0 is saturated, use erfinv
+    if hist[0]>0.5*hist.max():
+        std=(-m)/np.sqrt(2)/erfinv(hist[0]/hist[:hm].sum()-1)
+    else:
+        #std everithing below mean
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            std=np.sqrt(((m-im[im<m])**2).mean())
+    #3 std should be good
+    return m+3*std
+ 
+def getCircle(r):
+    """Return round kernel for morphological operations
+    
+    Parameters
+    ----------
+    r: uint
+        The radius
+        
+    Returns
+    -------
+    ker: 2d array
+        the kernel
+    """
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(2*r+1,2*r+1))
+    
+def backgroundMask(im, r=2, blur=False):
+    """Tries to extract the background of the image
     
     Parameters
     ----------
@@ -155,42 +210,63 @@ def getValid(im, r=2):
         the valid mask
     
     """
+    finite=np.isfinite(im)
+    if blur:
+        im=cv2.GaussianBlur(im,(2*r+1,2*r+1),0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        valid=im<backgroundTreshold(im)
+    valid=np.asarray(valid,dtype="uint8")
     
-    #take mode
-    immin=np.nanmin(im)
-    immax=np.nanmax(im)
-    hist,*_= np.histogram(im[np.isfinite(im)],1000,[immin,immax])
-    m=hist[1:-1].argmax()+1#don't want saturated values
-    hm=m
-    m=m*(immax-immin)/1000+immin
-    #if hist 0 is saturated, use erfinv
-    if hist[0]>0.5*hist.max():
-        std=(-m)/np.sqrt(2)/erfinv(hist[0]/hist[:hm].sum()-1)
-    else:
-        #std everithing below mean
-        std=np.sqrt(((m-im[im<m])**2).mean())
-    #3 std should be good
-    valid=im<m+3*std
-
-    def turad(r):
-        return (2*r+1,2*r+1)
     #remove dots in proteins (3px dots)
-    valid=cv2.erode(np.asarray(valid,dtype="uint8"),np.ones(turad(r)))
+    valid=cv2.erode(valid,getCircle(r))
     #remove dots in background (2 px dots)
-    valid=cv2.dilate(valid,np.ones(turad(r+1)))
+    valid=cv2.dilate(valid,getCircle(r+r//2))
     #widen proteins (10 px around proteins)
-    valid=cv2.erode(valid,np.ones(turad(r+1)))
+    valid=cv2.erode(valid,getCircle(r))
 
     #If invalid values in im, get rid of them
-    valid=np.logical_and(valid,np.isfinite(im))
+    valid=np.logical_and(valid,finite)
+    
+    return valid
+    
+def signalMask(im, r=2, blur=False):
+    """Tries to extract the signal of the image
+    
+    Parameters
+    ----------
+    im: 2d array
+        The image
+    r: uint
+        The radius used to fill the gaps
+        
+    Returns
+    -------
+    valid: 2d array
+        the valid mask
     
     """
-    from matplotlib import pyplot as plt
-    plt.figure()
-    plt.imshow(valid)
-    #"""
+    finite=np.isfinite(im)
+    if blur:
+        im=cv2.GaussianBlur(im,(2*r+1,2*r+1),0)
+        
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        valid=im>backgroundTreshold(im)
+    valid=np.asarray(valid,dtype="uint8")
+
+    #remove dots in proteins (3px dots)
+    valid=cv2.dilate(valid,getCircle(r))
+    #remove dots in background (2 px dots)
+    valid=cv2.erode(valid,getCircle(r+r//2))
+    #widen proteins (10 px around proteins)
+    valid=cv2.dilate(valid,getCircle(r//2))
+
+    #If invalid values in im, get rid of them
+    valid=np.logical_and(valid,finite)
+    
     return valid
-   
+ 
 def polyfit2d(im, deg=2, percentile=None, mask=None):
     """Fit the function f to the degree deg
     
@@ -249,13 +325,14 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     if mask is not None:
         valid=mask
                      
-    elif percentile is not None:
-        #compare percentile with blured version
-        valid=im< np.nanpercentile(im,percentile)
+    elif percentile is not None and percentile is not 100:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            valid=im< np.nanpercentile(im,percentile)
         
     else:
-        #Some fallback function
-        valid=getValid(im)
+        #take everithing
+        valid=None
     
     #Number of x and y power combinations
     psize=((deg+1)*(deg+2))//2
@@ -281,11 +358,16 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
         for xp in range(deg*2+1-yp):
             #There is no clear need to recompute that each time
             np.dot((y**yp),(x**xp),out=vtmp)
-            np.multiply(vtmp,valid,out=vtmpmasked)
-            SOPV[yp,xp]=(vtmpmasked).sum()
+            if valid is not None:
+                np.multiply(vtmp,valid,out=vtmpmasked)
+                SOPV[yp,xp]=vtmpmasked.sum()
+            else:
+                SOPV[yp,xp]=vtmp.sum()
+            
             if yp<deg+1 and xp <deg+1-yp:
                 vander[getidx(yp,xp),:,:]=vtmp
-                vandermasked[getidx(yp,xp),:,:]=vtmpmasked
+                if valid is not None:
+                    vandermasked[getidx(yp,xp),:,:]=vtmpmasked
     
     #Then compute the LHS of the least square equation
     A=np.zeros((psize,psize),dtype='float32')
@@ -296,8 +378,12 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
                     A[getidx(yi,xi),getidx(yj,xj)]=SOPV[yi+yj,xi+xj]
     
     #Set everithing invalid to 0 (as x*0 =0 works for any x)
-    d=im.copy()
-    d[np.logical_not(valid)]=0
+    if valid is not None:
+        d=im.copy()
+        d[np.logical_not(valid)]=0
+    else:
+        d=im
+        vandermasked=vander
 
     #Get the RHS of the least square equation
     b=np.dot(np.reshape(vandermasked,(vandermasked.shape[0],-1)),
@@ -308,50 +394,50 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     #Multiply the coefficient with the vandermonde matrix to find the result
     return np.dot(np.moveaxis(vander,0,-1),c)
     
-def polyfit2d_alt(im, deg=[2,2], percentile=100):
-    """Fit the function f to the degree deg
-    
-    Parameters
-    ----------
-    im: 2d array
-        The image to fit
-    deg: 2 numbers, defaults [2,2]
-        The Y and X polynomial degrees to fit
-    percentile: number, optional
-        The percentage of the image covered by the background
-    
-    Returns
-    -------
-    im: 2d array
-        The fitted polynomial surface
-        
-    Notes
-    -----
-    Ignore everithing above percentile
-    This is kind of wrong as y^2 * x^2 is not 2nd degree...
-    """
-    #clean input
-    deg = np.asarray(deg)
-    im = np.asarray(im)  
-    im = cv2.GaussianBlur(im,(11,11),0)
-    #get x,y
-    x = np.asarray(range(im.shape[1]))
-    y = np.asarray(range(im.shape[0]))
-    X = np.array(np.meshgrid(x,y))
-    #save shape
-    initshape=im.shape
-    #get vander matrix
-    vander = polynomial.polyvander2d(X[0], X[1], deg)
-    #reshape for lstsq
-    vander = vander.reshape((-1,vander.shape[-1]))
-    im = im.reshape((vander.shape[0],))
-    #get valid values
-    valid=im<np.nanpercentile(im,percentile)
-    #Find coefficients
-    c = np.linalg.lstsq(vander[valid,:], im[valid])[0]
-    #Compute value
-    ret=np.dot(vander,c)
-    return ret.reshape(initshape)
+#def polyfit2d_alt(im, deg=[2,2], percentile=100):
+#    """Fit the function f to the degree deg
+#    
+#    Parameters
+#    ----------
+#    im: 2d array
+#        The image to fit
+#    deg: 2 numbers, defaults [2,2]
+#        The Y and X polynomial degrees to fit
+#    percentile: number, optional
+#        The percentage of the image covered by the background
+#    
+#    Returns
+#    -------
+#    im: 2d array
+#        The fitted polynomial surface
+#        
+#    Notes
+#    -----
+#    Ignore everithing above percentile
+#    This is kind of wrong as y^2 * x^2 is not 2nd degree...
+#    """
+#    #clean input
+#    deg = np.asarray(deg)
+#    im = np.asarray(im)  
+#    im = cv2.GaussianBlur(im,(11,11),0)
+#    #get x,y
+#    x = np.asarray(range(im.shape[1]))
+#    y = np.asarray(range(im.shape[0]))
+#    X = np.array(np.meshgrid(x,y))
+#    #save shape
+#    initshape=im.shape
+#    #get vander matrix
+#    vander = polynomial.polyvander2d(X[0], X[1], deg)
+#    #reshape for lstsq
+#    vander = vander.reshape((-1,vander.shape[-1]))
+#    im = im.reshape((vander.shape[0],))
+#    #get valid values
+#    valid=im<np.nanpercentile(im,percentile)
+#    #Find coefficients
+#    c = np.linalg.lstsq(vander[valid,:], im[valid])[0]
+#    #Compute value
+#    ret=np.dot(vander,c)
+#    return ret.reshape(initshape)
 
     
     #    vandermonde=np.zeros(((deg[0]*2+1),(deg[1]*2+1),*(im.shape)),dtype='float64')

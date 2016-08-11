@@ -25,9 +25,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ##############REPLACE NAMES HERE############################
 #image name goes through glob => use * if you want
-imagefn='/Users/quentinpeter/Desktop/25uM_Transferrin_resistance.tif'
-backgroundfn='/Users/quentinpeter/Desktop/bg_resistance.tif'
-outputfn='output'
+imagefn='Yuewen/12-1.tif'
+backgroundfn='Yuewen/12.tif'
+outputfn='6uM_BSA_25mM_phosphate_pH_7p7_diffusion_23C_12_output'
 
 #the percentile is the approximate area of the image covered by background
 percentile=None
@@ -43,11 +43,11 @@ from PIL import Image
 import cv2
 from glob import glob
 import numpy as np
+import matplotlib.pyplot as plt
 
 def printInfo(d,m):
     print('mean',d[m].mean(),
-          'std',d[m].std(),
-          'std/SQRT(N)',d[m].std()/np.sqrt(m.sum()))
+          'std',d[m].std())
 
 #load images
 bg=mpimg.imread(backgroundfn)
@@ -73,6 +73,20 @@ for i, im in enumerate(imgs):
     printInfo(output,sm)
     print('Background '+str(i))
     printInfo(output,bm)
+    
+    pixsize=8#um
+    magnification=10
+    X=np.arange(output.shape[0])*pixsize/magnification
+    
+    plt.figure()
+    plt.plot(X,np.nanmean(output,1))
+    plt.xlabel('\mu m')
+    plt.ylabel('Normalized intensity')
+    
+    plt.figure()
+    plt.plot(X,np.nanstd(output,1)/np.sqrt(np.sum(np.isfinite(output),1)))
+    plt.xlabel('\mu m')
+    plt.ylabel('STD/SQRT(N)')
     
   
 

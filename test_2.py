@@ -46,6 +46,10 @@ im=mpimg.imread('Yuewen/25uM_Transferrin_resistance.tif')
 bg=mpimg.imread('Yuewen/bg_resistance.tif')
 
 #%%
+im=mpimg.imread('Yuewen/12-1.tif')
+bg=mpimg.imread('Yuewen/12.tif')
+
+#%%
 rmbg.polyfit2d(bg)
 #%%
 d=rmbg.remove_curve_background(im,bg,xOrientate=True)
@@ -77,3 +81,20 @@ figure()
 imshow(bm)
 printInfo(d2p,bm)
 
+#%%
+a=im/rmbg.polyfit2d(im,mask=rmbg.backgroundMask(im))
+b=bg/rmbg.polyfit2d(bg)
+figure()
+imshow(a)
+
+figure()
+imshow(b)
+
+#%%
+
+figure()
+plot(np.mean(a,0))
+plot(np.mean(b,0))
+plot(np.nanmean(d2p,1)[::-1]+1)
+#%%
+d2p=rmbg.remove_curve_background(im,bg,twoPass=True,xOrientate=True)

@@ -102,18 +102,27 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         im=im/polyfit2d(im,deg,mask=mask)
         data=im-bg
                
-        
     #if we want to orientate the image, do it now
     if xOrientate:
         #rotate
         data=ir.rotate_scale(data,-angleOri,1, borderValue=np.nan)
-    
+        
+        
     """
     from matplotlib.pyplot import figure, plot
+    im[np.isnan(data)]=np.nan
+    bg[np.isnan(data)]=np.nan
+    im=ir.rotate_scale(im,-angleOri,1, borderValue=np.nan)
+    bg=ir.rotate_scale(bg,-angleOri,1, borderValue=np.nan)
     figure()
     plot(np.nanmean(im,1))
     plot(np.nanmean(bg,1))
+    plot(np.nanmean(data,1)+1)
     #"""
+    
+    
+    
+    
     #return result
     return data
     

@@ -29,7 +29,7 @@ from scipy.special import erfinv
 import warnings
 
 def remove_curve_background(im, bg, percentile=None, deg=2, *, 
-                            xOrientate=False, twoPass=False):
+                            xOrientate=False, twoPass=False, infoDict=None):
     """flatten the image by removing the curve and the background fluorescence. 
     
     Parameters
@@ -47,6 +47,8 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         if True, will orientate the image along the x axis
     twoPass: boolean, defaults False
         Uses 2 pass to get flatter result
+    infoDict: dictionnary
+        If not None, will contain the infos on modification
     
     Returns
     -------
@@ -75,6 +77,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     im[nanim]=1
     bg[nanbg]=1
        
+    angleOri=0
     #make FFT calculations on background and image
     if xOrientate:    
         angleOri=ir.orientation_angle(im)
@@ -107,6 +110,11 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         #rotate
         data=ir.rotate_scale(data,-angleOri,1, borderValue=np.nan)
         
+    if infoDict is not None:
+        infoDict['imageAngle']=angleOri
+        infoDict['diffAngle']=angle
+        infoDict['diffScale']=scale
+        infoDict['offset']=shift
         
     """
     from matplotlib.pyplot import figure, plot

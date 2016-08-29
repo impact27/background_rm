@@ -349,7 +349,9 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
         
     else:
         #take everithing
-        valid=None
+        valid=np.isfinite(im)
+        if np.all(valid):
+            valid=None
     
     #Number of x and y power combinations
     psize=((deg+1)*(deg+2))//2

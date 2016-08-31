@@ -35,9 +35,9 @@ importlib.reload(cr)
 importlib.reload(rmbg)
 
 #%% load images
-fns=['UVData/im0.tif']
-fns.append('UVData/ba_e1105qt5_500ms.tif')
-fns.append('UVData/ba_e1105qt5bg2_1000ms.tif')
+fns=['Data/UVData/im0.tif']
+fns.append('Data/UVData/ba_e1105qt5_500ms.tif')
+fns.append('Data/UVData/ba_e1105qt5bg2_1000ms.tif')
 imgs=[mpimg.imread(fn) for fn in fns]
 
 #%%
@@ -66,11 +66,6 @@ im1=imgs[0]
 
 data0=rmbg.remove_curve_background(im0,bg)
 data1=rmbg.remove_curve_background(im1,bg)
-
-#%%
-figure()
-imshow(rmbg.polyfit2d(im1,percentile=90)-rmbg.polyfit2d_alt(im1,[2,2],90))
-colorbar()
 
 #%% Plot images with background removed
 # im0

@@ -33,8 +33,8 @@ importlib.reload(ir)
 importlib.reload(rmbg)
 
 #%
-bg=mpimg.imread('Maya/12_background.tif')
-im=mpimg.imread('Maya/12.tif')
+bg=mpimg.imread('Data/Maya/12_background.tif')
+im=mpimg.imread('Data/Maya/12.tif')
 im=ir.rotate_scale(im,np.pi/12,.8,np.nan)
 #%
 

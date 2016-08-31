@@ -44,8 +44,8 @@ importlib.reload(rmbg)
 #im=imgs[0]
 
 #%%
-bg=mpimg.imread('Maya/3_background.tif')
-im=mpimg.imread('Maya/3.tif')
+bg=mpimg.imread('Data/Maya/3_background.tif')
+im=mpimg.imread('Data/Maya/3.tif')
 
 
 #get angle scale and shift

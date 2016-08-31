@@ -48,9 +48,9 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     xOrientate: boolean, default False
         if True, will orientate the image along the x axis
     twoPass: boolean, defaults False
-        Uses 2 pass to get flatter result
+        Uses 2 pass to get flatter result. Do not use with detectChannel
     detectChannel: boolean, default False
-        Tries to detect the channel. Do not use with twoPass
+        Tries to detect the channel.
     infoDict: dictionnary
         If not None, will contain the infos on modification
     
@@ -61,6 +61,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         
     Notes
     -----
+    for detectChannel, The channel should be clearly visible and straight.
     TODO: this function takes almost 2 seconds for a single pair of 1000x1000
     matrices!!! 1.2 of which for folyfit2d! need to optimize that
     """
@@ -70,33 +71,21 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     if percentile is None:
         mask=backgroundMask(im)
       
-    #Flatten the imaget   
+    #Flatten the image 
     im=im/polyfit2d(im,deg,percentile, mask=mask)#
+    #Consider the background is flat (remove obvious dust)
+    bg=bg/polyfit2d(bg,deg,mask=backgroundMask(im, nstd=6))
     
     #if the image has any nans, replace by 1 (for fft)
     nanim=np.isnan(im)
+    nanbg=np.isnan(bg)
     im[nanim]=1
+    bg[nanbg]=1
 
     #Detect the image angle if needed
     angleOri=0
     if xOrientate or detectChannel:    
-        angleOri=ir.orientation_angle(im)
-    
-    #If detect channel, correct with channel and proceed
-    if detectChannel:
-        mask= channelMask(bg,angleOri)
-        im=im/polyfit2d(im,deg,mask=mask)
-        bg=bg/polyfit2d(bg,deg,mask=mask)
-#        np.logical_and(mask,backgroundMask(im))np.logical_and(mask,backgroundMask(bg))
-    else:
-#        mask=backgroundMask(bg),mask=mask
-        #else consider the background is flat
-        bg=bg/polyfit2d(bg,deg)
-
-
-    #Correct the background for nan too
-    nanbg=np.isnan(bg)
-    bg[nanbg]=1
+        angleOri=ir.orientation_angle(im)    
      
     #get angle scale and shift
     angle, scale, shift, __ = ir.register_images(im,bg)
@@ -112,9 +101,15 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     if im.shape is not bg.shape:
         im, bg = same_size(im,bg)
         
+    #If detect channel, correct with channel and proceed
+    if detectChannel:
+        mask= outChannelMask(bg,angleOri)
+        im=im/polyfit2d(im,deg,mask=mask)
+        bg=bg/polyfit2d(bg,deg,mask=mask)   
+        
     #subtract background
     data=im-bg
-    
+        
     #If 2 pass, get flatter image and resubtract    
     if twoPass:
         mask=backgroundMask(data,im.shape[0]//100,blur=True)
@@ -149,9 +144,27 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     #return result
     return data
  
-def channelMask(im, chAngle=0):
-    """
-    im should not contain nans unless xOriented is true
+def outChannelMask(im, chAngle=0):
+    """Creates a mask that excludes the channel
+    
+    Parameters
+    ----------
+    im: 2d array
+        The image
+    chAngle: number
+        The angle of the channel in radians
+    
+    Returns
+    -------
+    mask: 2d array
+        the mask excluding the channel
+        
+    Notes
+    -----
+    The channel should be clear(ish) on the image. 
+    The angle should be aligned with the channel
+    
+
     """
     im=np.asarray(im,dtype='float32')
     #Remove clear dust
@@ -163,17 +176,21 @@ def channelMask(im, chAngle=0):
     #Orientate image along x if not done
     if chAngle !=0:
         scharr= ir.rotate_scale(scharr, -chAngle,1,np.nan)
-    #get profile
-    prof=np.nanmean(scharr,1)
-    #get threshold
-    threshold=np.nanmean(prof)+3*np.nanstd(prof)
-    mprof=prof>threshold
-    edgeargs=np.flatnonzero(mprof)
-    mask=np.zeros(im.shape)
-    mask[edgeargs[0]-5:edgeargs[-1]+5,:]=2
-    if chAngle !=0:
-        mask= ir.rotate_scale(mask, chAngle,1,np.nan)
-    return np.logical_and(mask<1, np.isfinite(im))
+        
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")    
+            #get profile
+        prof=np.nanmean(scharr,1)
+        #get threshold
+        threshold=np.nanmean(prof)+3*np.nanstd(prof)
+        mprof=prof>threshold
+        edgeargs=np.flatnonzero(mprof)
+        mask=np.zeros(im.shape)
+        mask[edgeargs[0]-5:edgeargs[-1]+5,:]=2
+        if chAngle !=0:
+            mask= ir.rotate_scale(mask, chAngle,1,np.nan)
+        mask=np.logical_and(mask<1, np.isfinite(im))
+    return mask
     
 def same_size(im0,im1):    
     """Pad with nans to get similarely shaped matrix

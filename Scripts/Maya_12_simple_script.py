@@ -40,6 +40,7 @@ import numpy as np
 from natsort import natsorted
 import scipy
 import matplotlib
+import warnings
 cmap = matplotlib.cm.get_cmap('Spectral')
 
 
@@ -62,10 +63,11 @@ maxi=[]
 for i, im in enumerate(imgs):
     #remove background
     output=rmbg.remove_curve_background(im,bgs[i],detectChannel=True, xOrientate=True)
-    fil=scipy.ndimage.filters.gaussian_filter1d(np.nanmean(output,1)[200:800],21)
-    amax=fil.argmax()
-    
-    profile.append(np.nanmean(output,1)[200:800])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore") 
+        fil=scipy.ndimage.filters.gaussian_filter1d(np.nanmean(output,1)[200:800],21)
+        amax=fil.argmax()
+        profile.append(np.nanmean(output,1)[200:800])
     X=np.arange(600)-amax
     valid=np.logical_and(X>-150,X<150)
     X=X[valid]

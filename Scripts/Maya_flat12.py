@@ -59,7 +59,7 @@ im0[nanim]=1
 angleOri=ir.orientation_angle(im0)
 
 #If detect channel, correct with channel and proceed
-mask= rmbg.channelMask(bg0,angleOri)
+mask= rmbg.outChannelMask(bg0,angleOri)
 
 im0=im0/rmbg.polyfit2d(im0,mask=mask)
 bg0=bg0/rmbg.polyfit2d(bg0,mask=mask)
@@ -114,6 +114,7 @@ plot(np.nanmean(bg0,1),'g')
 plot(np.nanmean(data,1)+1,'r')
 plot([0,im0.shape[0]],[1,1])
 
+#%%
 figure()
 imshow(im)
 figure()

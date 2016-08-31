@@ -42,12 +42,12 @@ def printInfo(d,m):
 importlib.reload(rmbg)
 
 #%% load images
-im=mpimg.imread('Yuewen/25uM_Transferrin_resistance.tif')
-bg=mpimg.imread('Yuewen/bg_resistance.tif')
+im=mpimg.imread('Data/Yuewen/25uM_Transferrin_resistance.tif')
+bg=mpimg.imread('Data/Yuewen/bg_resistance.tif')
 
 #%%
-im=mpimg.imread('Yuewen/12-1.tif')
-bg=mpimg.imread('Yuewen/12.tif')
+im=mpimg.imread('Data/Yuewen/12-1.tif')
+bg=mpimg.imread('Data/Yuewen/12.tif')
 
 #%%
 rmbg.polyfit2d(bg)

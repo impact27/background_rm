@@ -25,8 +25,8 @@ importlib.reload(cr)
 importlib.reload(rmbg)
 
 #%% Load Images
-imfn='Data/Maya_Images/im_1.tif'
-bgfn='Data/Maya_background/1.tif'
+imfn='Data/Maya_Images/im_0.tif'
+bgfn='Data/Maya_background/0.tif'
 
 
 im=mpimg.imread(imfn)
@@ -121,4 +121,16 @@ figure()
 imshow(bg)
 figure()
 imshow(data)
+
+#%%
+
+figure()
+data=rmbg.remove_curve_background(im,bg,infoDict=info,xOrientate=True)
+plot(np.nanmean(data,1))
+data=rmbg.remove_curve_background(im,bg,infoDict=info, twoPass=True,xOrientate=True)
+plot(np.nanmean(data,1))
+data=rmbg.remove_curve_background(im,bg,infoDict=info, detectChannel=True,xOrientate=True)
+plot(np.nanmean(data,1))
+plot([0,im0.shape[0]],[0,0])
+
 

@@ -4,7 +4,7 @@ Created on Tue Aug  2 15:10:22 2016
 
 @author: quentinpeter
 
-Simple usage of the background removal script
+Plot of the 12 points of the diffusion device
 
 Copyright (C) 2016  Quentin Peter
 
@@ -23,32 +23,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 
-##############REPLACE NAMES HERE############################
-#image name goes through glob => use * if you want
+#load im files names
 imagefn=    'Data/Maya_images/im_*.tif'
 backgroundfn='Data/Maya_background/*.tif'
-############################################################
 
 #imports everithing needed
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import background_rm as rmbg
-from PIL import Image
-import cv2
 from glob import glob
 import numpy as np
 from natsort import natsorted
 import scipy
 import matplotlib
 import warnings
+
+gfilter=scipy.ndimage.filters.gaussian_filter1d
+
+#Get color for plot
 cmap = matplotlib.cm.get_cmap('Spectral')
 
-
-def printInfo(d,m):
-    print('mean',d[m].mean(),
-          'std',d[m].std(),
-          'std/SQRT(N)',d[m].std()/np.sqrt(m.sum()))
-
+#Get list data
 imagefn=natsorted(glob(imagefn))
 backgroundfn=natsorted(glob(backgroundfn))
 
@@ -57,33 +52,37 @@ bgs=[mpimg.imread(fn) for fn in backgroundfn]
 imgs=[mpimg.imread(fn) for fn in imagefn]
 
 assert(len(bgs)==len(imgs))
-profile=[]
 vari=[]
-maxi=[]
 for i, im in enumerate(imgs):
     #remove background
-    output=rmbg.remove_curve_background(im,bgs[i],detectChannel=True, xOrientate=True)
+    output=rmbg.remove_curve_background(im,bgs[i],detectChannel=True, 
+                                        xOrientate=True)
+    #get profile and center with maximum of filtered
     with warnings.catch_warnings():
         warnings.simplefilter("ignore") 
-        fil=scipy.ndimage.filters.gaussian_filter1d(np.nanmean(output,1)[200:800],21)
+        fil=gfilter(np.nanmean(output,1)[200:800],21)
         amax=fil.argmax()
-        profile.append(np.nanmean(output,1)[200:800])
+        profile=np.nanmean(output,1)[200:800]
+
+    #Compute X and restrict to a 300px wide channel
     X=np.arange(600)-amax
     valid=np.logical_and(X>-150,X<150)
     X=X[valid]
-    Y=profile[i][valid]
+    Y=profile[valid]
+
+    #Get var and save normalized variance
     valmax=Y.max()
-    var=np.nansum((Y*X**2)[Y>.05])/np.nansum(Y[Y>.05])
+    #.05 Choosen to get rid of dust but may be changed
+    var=np.nansum((Y*X**2)[Y>.05])/np.nansum(Y[Y>.05]) 
+    #The "Normalized" variance is var/a, with function f=a*norm(0,var)
+    #As Y.max is a/sqrt(2 pi var):
     vari.append(var/valmax/np.sqrt(2*np.pi*var))
-    maxi.append(valmax*np.sqrt(2*np.pi*var))
+    
+    #plot profile and fit
     plt.plot(X,Y-.1*i,c=cmap(i/len(imgs)))
     plt.plot(X,valmax*np.exp(-(X**2)/(2*var))-.1*i,c=cmap(i/len(imgs)))
 
-    
-#    plt.plot(X,Y/np.sum(Y[Y>0.5]),c=cmap(i/len(imgs)))
-#    plt.plot(X,1/np.sqrt(2*np.pi*var)*np.exp(-(X**2)/(2*var)),c=cmap(i/len(imgs)))
-    
-#%%
+#%% plot variances
 X=np.array([3.5,5.3,8.6,10.3,18.6,20.4,28.6,30.4,58.7,60.5,88.7,90.5])
 Y=vari[1:]
 plt.figure()

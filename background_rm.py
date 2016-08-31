@@ -166,7 +166,7 @@ def outChannelMask(im, chAngle=0):
     
 
     """
-    im=np.asarray(im,dtype='float32')
+    im=np.array(im,dtype='float32')
     #Remove clear dust
     mask=backgroundMask(im, nstd=6)
     im[~mask]=np.nan

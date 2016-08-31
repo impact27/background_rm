@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import image_registration.image as ir
+import image_registration.channel as cr
 import numpy as np
 from numpy.polynomial import polynomial
 import cv2
@@ -29,7 +30,8 @@ from scipy.special import erfinv
 import warnings
 
 def remove_curve_background(im, bg, percentile=None, deg=2, *, 
-                            xOrientate=False, twoPass=False, infoDict=None):
+                            xOrientate=False, twoPass=False, infoDict=None,
+                            detectChannel=False):
     """flatten the image by removing the curve and the background fluorescence. 
     
     Parameters
@@ -47,6 +49,8 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         if True, will orientate the image along the x axis
     twoPass: boolean, defaults False
         Uses 2 pass to get flatter result
+    detectChannel: boolean, default False
+        Tries to detect the channel. Do not use with twoPass
     infoDict: dictionnary
         If not None, will contain the infos on modification
     
@@ -61,31 +65,43 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     matrices!!! 1.2 of which for folyfit2d! need to optimize that
     """
     
+    #create mask to detect the background
     mask=None
     if percentile is None:
         mask=backgroundMask(im)
-        
-    #Remove curve from background and image (passing percentile to image)
-    #The intensity has arbitraty units. To have the same variance,
-    #we need to divide and not subtract   
+      
+    #Flatten the imaget   
     im=im/polyfit2d(im,deg,percentile, mask=mask)#
-    bg=bg/polyfit2d(bg,deg)
     
-    #if the image or the background have any nans, replace by 1 (for fft)
+    #if the image has any nans, replace by 1 (for fft)
     nanim=np.isnan(im)
-    nanbg=np.isnan(bg)
     im[nanim]=1
-    bg[nanbg]=1
-       
+
+    #Detect the image angle if needed
     angleOri=0
-    #make FFT calculations on background and image
-    if xOrientate:    
+    if xOrientate or detectChannel:    
         angleOri=ir.orientation_angle(im)
-        
+    
+    #If detect channel, correct with channel and proceed
+    if detectChannel:
+        mask= channelMask(bg,angleOri)
+        im=im/polyfit2d(im,deg,mask=mask)
+        bg=bg/polyfit2d(bg,deg,mask=mask)
+#        np.logical_and(mask,backgroundMask(im))np.logical_and(mask,backgroundMask(bg))
+    else:
+#        mask=backgroundMask(bg),mask=mask
+        #else consider the background is flat
+        bg=bg/polyfit2d(bg,deg)
+
+
+    #Correct the background for nan too
+    nanbg=np.isnan(bg)
+    bg[nanbg]=1
+     
     #get angle scale and shift
     angle, scale, shift, __ = ir.register_images(im,bg)
     
-    #remobe the previously added nans
+    #remove the previously added nans
     im[nanim]=np.nan
     bg[nanbg]=np.nan
     
@@ -99,7 +115,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     #subtract background
     data=im-bg
     
-    #If 2 pass, get flatter image and resubtract
+    #If 2 pass, get flatter image and resubtract    
     if twoPass:
         mask=backgroundMask(data,im.shape[0]//100,blur=True)
         im=im/polyfit2d(im,deg,mask=mask)
@@ -115,7 +131,8 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         infoDict['diffAngle']=angle
         infoDict['diffScale']=scale
         infoDict['offset']=shift
-        
+    
+   
     """
     from matplotlib.pyplot import figure, plot
     im[np.isnan(data)]=np.nan
@@ -126,13 +143,37 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     plot(np.nanmean(im,1))
     plot(np.nanmean(bg,1))
     plot(np.nanmean(data,1)+1)
+    plot([0,im.shape[0]],[1,1])
     #"""
-    
-    
-    
     
     #return result
     return data
+ 
+def channelMask(im, chAngle=0):
+    """
+    im should not contain nans unless xOriented is true
+    """
+    im=np.asarray(im,dtype='float32')
+    #Remove clear dust
+    mask=backgroundMask(im, nstd=6)
+    im[~mask]=np.nan
+    
+    #get edge
+    scharr=cr.Scharr_edge(im)
+    #Orientate image along x if not done
+    if chAngle !=0:
+        scharr= ir.rotate_scale(scharr, -chAngle,1,np.nan)
+    #get profile
+    prof=np.nanmean(scharr,1)
+    #get threshold
+    threshold=np.nanmean(prof)+3*np.nanstd(prof)
+    mprof=prof>threshold
+    edgeargs=np.flatnonzero(mprof)
+    mask=np.zeros(im.shape)
+    mask[edgeargs[0]-5:edgeargs[-1]+5,:]=2
+    if chAngle !=0:
+        mask= ir.rotate_scale(mask, chAngle,1,np.nan)
+    return np.logical_and(mask<1, np.isfinite(im))
     
 def same_size(im0,im1):    
     """Pad with nans to get similarely shaped matrix
@@ -163,7 +204,7 @@ def same_size(im0,im1):
     return im0,im1
 
     
-def backgroundTreshold(im):
+def backgroundTreshold(im, nstd=3):
     """get a threshold to remove background
     
     Parameters
@@ -194,7 +235,7 @@ def backgroundTreshold(im):
             warnings.simplefilter("ignore")
             std=np.sqrt(((m-im[im<m])**2).mean())
     #3 std should be good
-    return m+3*std
+    return m+nstd*std
  
 def getCircle(r):
     """Return round kernel for morphological operations
@@ -211,7 +252,7 @@ def getCircle(r):
     """
     return cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(2*r+1,2*r+1))
     
-def backgroundMask(im, r=2, blur=False):
+def backgroundMask(im, r=2, blur=False, nstd=3):
     """Tries to extract the background of the image
     
     Parameters
@@ -232,7 +273,7 @@ def backgroundMask(im, r=2, blur=False):
         im=cv2.GaussianBlur(im,(2*r+1,2*r+1),0)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        valid=im<backgroundTreshold(im)
+        valid=im<backgroundTreshold(im,nstd)
     valid=np.asarray(valid,dtype="uint8")
     
     #remove dots in proteins (3px dots)
@@ -339,8 +380,9 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     x = np.asarray(range(im.shape[1]),dtype='float32')[np.newaxis,:]
     y = np.asarray(range(im.shape[0]),dtype='float32')[:,np.newaxis]
     
+    valid=np.isfinite(im)
     if mask is not None:
-        valid=mask
+        valid=np.logical_and(valid,mask)
                      
     elif percentile is not None and percentile is not 100:
         with warnings.catch_warnings():
@@ -411,6 +453,13 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     #Solve
     c=np.linalg.solve(A, b)
     #Multiply the coefficient with the vandermonde matrix to find the result
+    
+    """
+    from matplotlib.pyplot import figure, imshow
+    figure()
+    imshow(valid)
+    #"""
+    
     return np.dot(np.moveaxis(vander,0,-1),c)
     
 #def polyfit2d_alt(im, deg=[2,2], percentile=100):

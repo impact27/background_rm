@@ -25,9 +25,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ##############REPLACE NAMES HERE############################
 #image name goes through glob => use * if you want
-imagefn='Yuewen/12-1.tif'
-backgroundfn='Yuewen/12.tif'
-outputfn='6uM_BSA_25mM_phosphate_pH_7p7_diffusion_23C_12_output'
+imagefn='/Users/quentinpeter/Desktop/Test new background subtraction script/20160706_100uM_lyso_Tris_500ms_25hr_19.8_20.1C_Device20160704I_PA_1/Pos0/*.tif'
+backgroundfn='/Users/quentinpeter/Desktop/Test new background subtraction script/20160706_100uM_lyso_Tris_500ms_25hr_19.8_20.1C_Device20160704I_PA_1/background.tif'
+outputfn='/Users/quentinpeter/Desktop/output'
 
 #the percentile is the approximate area of the image covered by background
 percentile=None

@@ -40,6 +40,14 @@ fns.append('UVData/ba_e1105qt5_500ms.tif')
 fns.append('UVData/ba_e1105qt5bg2_1000ms.tif')
 imgs=[mpimg.imread(fn) for fn in fns]
 
+#%%
+im=imgs[0]
+figure()
+imshow(rmbg.polyfit2d(im))
+colorbar()
+figure()
+imshow(rmbg.polyfit2d(cv2.copyMakeBorder(im,5,5,5,5,cv2.BORDER_CONSTANT,value=np.nan)))
+colorbar()
 #%% Plot images
 #"""
 for im in imgs:

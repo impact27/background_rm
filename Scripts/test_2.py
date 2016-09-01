@@ -42,18 +42,18 @@ def printInfo(d,m):
 importlib.reload(rmbg)
 
 #%% load images
-im=mpimg.imread('Data/Yuewen/25uM_Transferrin_resistance.tif')
-bg=mpimg.imread('Data/Yuewen/bg_resistance.tif')
+im=mpimg.imread('../Data/Yuewen/25uM_Transferrin_resistance.tif')
+bg=mpimg.imread('../Data/Yuewen/bg_resistance.tif')
 
 #%%
-im=mpimg.imread('Data/Yuewen/12-1.tif')
-bg=mpimg.imread('Data/Yuewen/12.tif')
+im=mpimg.imread('../Data/Yuewen/12-1.tif')
+bg=mpimg.imread('../Data/Yuewen/12.tif')
 
 #%%
 rmbg.polyfit2d(bg)
 #%%
 d=rmbg.remove_curve_background(im,bg,xOrientate=True)
-d2p=rmbg.remove_curve_background(im,bg,twoPass=True,xOrientate=True)
+d2p=rmbg.remove_curve_background(im,bg,method='twoPass',xOrientate=True)
 d100=d=rmbg.remove_curve_background(im,bg,percentile=100,xOrientate=True)
 
 with warnings.catch_warnings():
@@ -96,5 +96,4 @@ figure()
 plot(np.mean(a,0))
 plot(np.mean(b,0))
 plot(np.nanmean(d2p,1)[::-1]+1)
-#%%
-d2p=rmbg.remove_curve_background(im,bg,twoPass=True,xOrientate=True)
+

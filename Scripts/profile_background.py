@@ -21,12 +21,9 @@ import background_rm as rmbg
 import matplotlib.image as mpimg
 
 #%% load images
-fns=['Data/UVData/im0.tif']
-fns.append('Data/UVData/ba_e1105qt5_500ms.tif')
-fns.append('Data/UVData/ba_e1105qt5bg2_1000ms.tif')
-imgs=[mpimg.imread(fn) for fn in fns]
-    
-
+im=mpimg.imread('../Data/UVData/im0.tif')
+bg=mpimg.imread('../Data/UVData/ba_e1105qt5_500ms.tif')
+method='gaussianBeam'
 #%%
 for i in range(10):
-    rmbg.remove_curve_background(imgs[1],imgs[0],xOrientate=True, twoPass=True)
+    rmbg.remove_curve_background(bg,im,xOrientate=True, method=method)

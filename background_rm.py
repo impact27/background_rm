@@ -24,14 +24,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import image_registration.image as ir
 import image_registration.channel as cr
 import numpy as np
-from numpy.polynomial import polynomial
 import cv2
 from scipy.special import erfinv
 import warnings
+import scipy
+sobel = scipy.ndimage.filters.sobel
 
 def remove_curve_background(im, bg, percentile=None, deg=2, *, 
-                            xOrientate=False, twoPass=False, infoDict=None,
-                            detectChannel=False):
+                            xOrientate=False, method='none', infoDict=None):
     """flatten the image by removing the curve and the background fluorescence. 
     
     Parameters
@@ -84,7 +84,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
 
     #Detect the image angle if needed
     angleOri=0
-    if xOrientate or detectChannel:    
+    if xOrientate or method == 'detectChannel' or method == 'gaussianBeam':    
         angleOri=ir.orientation_angle(im)    
      
     #get angle scale and shift
@@ -102,19 +102,27 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         im, bg = same_size(im,bg)
         
     #If detect channel, correct with channel and proceed
-    if detectChannel:
+    if method == 'detectChannel':
         mask= outChannelMask(bg,angleOri)
-        im=im/polyfit2d(im,deg,mask=mask)
-        bg=bg/polyfit2d(bg,deg,mask=mask)   
+        if mask is not None:
+            im=im/polyfit2d(im,deg,mask=mask)
+            bg=bg/polyfit2d(bg,deg,mask=mask)   
         
     #subtract background
     data=im-bg
         
     #If 2 pass, get flatter image and resubtract    
-    if twoPass:
+    if method == 'twoPass':
         mask=backgroundMask(data,im.shape[0]//100,blur=True)
         im=im/polyfit2d(im,deg,mask=mask)
+        #bg=bg/polyfit2d(bg,deg,mask=mask)
         data=im-bg
+    elif method == 'gaussianBeam':
+        mask= outGaussianBeamMask(data,angleOri)
+        if mask is not None:
+            im=im/polyfit2d(im,deg,mask=mask)
+            bg=bg/polyfit2d(bg,deg,mask=mask)
+            data=im-bg
                
     #if we want to orientate the image, do it now
     if xOrientate:
@@ -185,12 +193,90 @@ def outChannelMask(im, chAngle=0):
         threshold=np.nanmean(prof)+3*np.nanstd(prof)
         mprof=prof>threshold
         edgeargs=np.flatnonzero(mprof)
-        mask=np.zeros(im.shape)
-        mask[edgeargs[0]-5:edgeargs[-1]+5,:]=2
-        if chAngle !=0:
-            mask= ir.rotate_scale(mask, chAngle,1,np.nan)
-        mask=np.logical_and(mask<1, np.isfinite(im))
+        
+        if edgeargs.size > 2:
+            mask=np.zeros(im.shape)
+            mask[edgeargs[0]-5:edgeargs[-1]+5,:]=2
+            if chAngle !=0:
+                mask= ir.rotate_scale(mask, chAngle,1,np.nan)
+            mask=np.logical_and(mask<1, np.isfinite(im))
+        else:
+            mask= None
     return mask
+    
+def outGaussianBeamMask(data, chAngle=0):
+    """
+    A single, straight, protein beam is present. It is "Sinking" the profile 
+    such as the sides are leaning toward the center
+    """
+    data=np.asarray(data)
+    
+    #Filter to be used
+    gfilter=scipy.ndimage.filters.gaussian_filter1d
+    
+    #get profile
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  
+        profile=np.nanmean(ir.rotate_scale(data, -chAngle,1,np.nan),1)
+    
+    #guess position of max
+    amax= profile.size//2
+    
+    #get X and Y
+    X0=np.arange(profile.size)-amax
+    Y0=profile
+    
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore") 
+        #The cutting values are when the profiles goes below zero
+        rlim=np.flatnonzero(np.logical_and(Y0<0,X0>0))[0]
+        llim=np.flatnonzero(np.logical_and(Y0<0,X0<0))[-1]
+    
+    #We can now detect the true center
+    fil=gfilter(profile,21)
+    X0=X0-X0[np.nanargmax(fil[llim:rlim])]-llim
+    
+    #restrict to the correct limits
+    X=X0[llim:rlim]
+    Y=Y0[llim:rlim]-np.nanmin(Y0)
+    
+    #Fit the log, which should be a parabola
+    c=np.polyfit(X,np.log(Y),2)
+    
+    #Deduce the variance
+    var=-1/(2*c[0])
+    
+    #compute the limits (3std, restricted to half the image)
+    mean=np.nanargmax(fil[llim:rlim])+llim
+    dist=int(3*np.sqrt(var))
+    if dist > profile.size//4:
+        dist = profile.size//4
+    llim=mean-dist
+    if llim < 0:
+        return None
+    rlim=mean+dist
+    if rlim>profile.size:
+        return None
+    
+    #get mask
+    mask=np.ones(data.shape)
+    mask[llim:rlim,:]=0
+    mask= ir.rotate_scale(mask, chAngle,1,np.nan)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore") 
+        mask=np.logical_and(mask>.5, np.isfinite(data))
+    return mask
+    
+    """
+    import matplotlib.pyplot as plt
+    plt.figure()
+    #plot profile and fit
+    valmax=np.nanmax(Y)
+    plt.plot(X0,Y0)
+    plt.plot(X0,valmax*np.exp(-(X0**2)/(2*var))+np.nanmin(Y0))
+    plt.plot([llim-mean,llim-mean],[np.nanmin(Y0),np.nanmax(Y0)],'r')
+    plt.plot([rlim-mean,rlim-mean],[np.nanmin(Y0),np.nanmax(Y0)],'r')
+    #"""
     
 def same_size(im0,im1):    
     """Pad with nans to get similarely shaped matrix
@@ -406,11 +492,9 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
             warnings.simplefilter("ignore")
             valid=im< np.nanpercentile(im,percentile)
         
-    else:
-        #take everithing
-        valid=np.isfinite(im)
-        if np.all(valid):
-            valid=None
+    if np.all(valid):
+        valid=None
+        
     
     #Number of x and y power combinations
     psize=((deg+1)*(deg+2))//2
@@ -472,6 +556,8 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     #Multiply the coefficient with the vandermonde matrix to find the result
     
     """
+    if valid is None:
+        valid=[[0,0],[0,0]]
     from matplotlib.pyplot import figure, imshow
     figure()
     imshow(valid)

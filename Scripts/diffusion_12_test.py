@@ -24,8 +24,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 #load im files names
-imagefn=    'Data/Maya_images/im_*.tif'
-backgroundfn='Data/Maya_background/*.tif'
+imagefn=    '../Data/Maya_images/im_*.tif'
+backgroundfn='../Data/Maya_background/*.tif'
 
 #imports everithing needed
 import matplotlib.image as mpimg
@@ -55,7 +55,7 @@ assert(len(bgs)==len(imgs))
 vari=[]
 for i, im in enumerate(imgs):
     #remove background
-    output=rmbg.remove_curve_background(im,bgs[i],detectChannel=True, 
+    output=rmbg.remove_curve_background(im,bgs[i],method='detectChannel', 
                                         xOrientate=True)
     #get profile and center with maximum of filtered
     with warnings.catch_warnings():
@@ -74,9 +74,12 @@ for i, im in enumerate(imgs):
     valmax=Y.max()
     #.05 Choosen to get rid of dust but may be changed
     var=np.nansum((Y*X**2)[Y>.05])/np.nansum(Y[Y>.05]) 
+    valmax=np.nansum(Y[Y>0])/np.sqrt(2*np.pi*var)
     #The "Normalized" variance is var/a, with function f=a*norm(0,var)
     #As Y.max is a/sqrt(2 pi var):
     vari.append(var/valmax/np.sqrt(2*np.pi*var))
+    
+    print(np.nansum(Y[Y>0]),valmax*np.sqrt(2*np.pi*var))
     
     #plot profile and fit
     plt.plot(X,Y-.1*i,c=cmap(i/len(imgs)))

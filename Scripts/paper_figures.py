@@ -33,16 +33,19 @@ importlib.reload(ir)
 importlib.reload(rmbg)
 
 #%
-bg=mpimg.imread('Data/Maya/12_background.tif')
-im=mpimg.imread('Data/Maya/12.tif')
+bg=mpimg.imread('../Data/Maya/12_background.tif')
+im=mpimg.imread('../Data/Maya/12.tif')
+#bg=mpimg.imread('../Data/Maya_background/8.tif')
+#im=mpimg.imread('../Data/Maya_Images/im_8.tif')
 im=ir.rotate_scale(im,np.pi/12,.8,np.nan)
 #%
 
-data=rmbg.remove_curve_background(im,bg)
+data=rmbg.remove_curve_background(im,bg, method='gaussianBeam')
 
 #%%
 info={}
-odata=rmbg.remove_curve_background(im,bg,xOrientate=True, twoPass=True, 
+odata=rmbg.remove_curve_background(im,bg,xOrientate=True,
+                                   method='gaussianBeam', 
                                    infoDict=info)
 
 
@@ -111,10 +114,11 @@ plot(X,np.nanmean(odata,1),label="Processed image")
 plot([0,X[-1]],[0,0],'r--')
 plot([0,X[-1]],[0.2,0.2],'r--')
 plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
-           ncol=2, mode="expand", borderaxespad=0.)
-plt.xlabel('Position [$\mu m$]')
-plt.ylabel('Amplitude [unitless]')
-#plt.savefig("compared.pdf")
+           ncol=2, mode="expand", borderaxespad=0., fontsize=14)
+plt.xlabel('Position [$\mu m$]',size=18)
+plt.ylabel('Amplitude',size=18)
+plt.tick_params(labelsize=14)
+#plt.savefig("compared.pdf",bbox_inches='tight')
 
 #%%
 oim2=cv2.resize(oim[300:700,:]-1,(500,200),interpolation=cv2.INTER_AREA)

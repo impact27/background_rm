@@ -25,15 +25,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ##############REPLACE NAMES HERE############################
 #image name goes through glob => use * if you want
-imagefn='/Users/quentinpeter/Desktop/Test new background subtraction script/20160706_100uM_lyso_Tris_500ms_25hr_19.8_20.1C_Device20160704I_PA_1/Pos0/*.tif'
-backgroundfn='/Users/quentinpeter/Desktop/Test new background subtraction script/20160706_100uM_lyso_Tris_500ms_25hr_19.8_20.1C_Device20160704I_PA_1/background.tif'
+imagefn='../Data/Maya/3.tif'
+backgroundfn='../Data/Maya/3_background.tif'
 outputfn='/Users/quentinpeter/Desktop/output'
 
 #the percentile is the approximate area of the image covered by background
 percentile=None
 blur=False
 xOrientate=True
-twoPass=True
+method='twoPass'
+printInfos=True
 ############################################################
 
 #imports everithing needed
@@ -56,7 +57,7 @@ imgs=[mpimg.imread(fn) for fn in glob(imagefn)]
 for i, im in enumerate(imgs):
     #remove background
     output=rmbg.remove_curve_background(im,bg,percentile=percentile, 
-                                        xOrientate=xOrientate, twoPass=twoPass)
+                                        xOrientate=xOrientate, method=method)
     
     #blur if asked
     if blur:
@@ -66,27 +67,29 @@ for i, im in enumerate(imgs):
     outim = Image.fromarray(output,'F')
     outim.save(outputfn+str(i)+'.tif')
     
-    sm=rmbg.signalMask(output,10,True)
-    bm=rmbg.backgroundMask(output,10,True)
+    if printInfos:
     
-    print('Signal '+str(i))
-    printInfo(output,sm)
-    print('Background '+str(i))
-    printInfo(output,bm)
-    
-    pixsize=8#um
-    magnification=10
-    X=np.arange(output.shape[0])*pixsize/magnification
-    
-    plt.figure()
-    plt.plot(X,np.nanmean(output,1))
-    plt.xlabel('\mu m')
-    plt.ylabel('Normalized intensity')
-    
-    plt.figure()
-    plt.plot(X,np.nanstd(output,1)/np.sqrt(np.sum(np.isfinite(output),1)))
-    plt.xlabel('\mu m')
-    plt.ylabel('STD/SQRT(N)')
+        sm=rmbg.signalMask(output,10,True)
+        bm=rmbg.backgroundMask(output,10,True)
+        
+        print('Signal '+str(i))
+        printInfo(output,sm)
+        print('Background '+str(i))
+        printInfo(output,bm)
+        
+        pixsize=8#um
+        magnification=10
+        X=np.arange(output.shape[0])*pixsize/magnification
+        
+        plt.figure()
+        plt.plot(X,np.nanmean(output,1))
+        plt.xlabel('\mu m')
+        plt.ylabel('Normalized intensity')
+        
+        plt.figure()
+        plt.plot(X,np.nanstd(output,1)/np.sqrt(np.sum(np.isfinite(output),1)))
+        plt.xlabel('\mu m')
+        plt.ylabel('STD/SQRT(N)')
     
   
 

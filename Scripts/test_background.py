@@ -35,9 +35,9 @@ importlib.reload(cr)
 importlib.reload(rmbg)
 
 #%% load images
-fns=['Data/UVData/im0.tif']
-fns.append('Data/UVData/ba_e1105qt5_500ms.tif')
-fns.append('Data/UVData/ba_e1105qt5bg2_1000ms.tif')
+fns=['../Data/UVData/im0.tif']
+fns.append('../Data/UVData/ba_e1105qt5_500ms.tif')
+fns.append('../Data/UVData/ba_e1105qt5bg2_1000ms.tif')
 imgs=[mpimg.imread(fn) for fn in fns]
 
 #%%
@@ -171,7 +171,7 @@ with warnings.catch_warnings():
 data1=rmbg.remove_curve_background(im1,bg)
 data1100=rmbg.remove_curve_background(im1,bg,percentile=100)
 data195=rmbg.remove_curve_background(im1,bg,percentile=95)
-data12p=rmbg.remove_curve_background(im1,bg,twoPass=True)
+data12p=rmbg.remove_curve_background(im1,bg,method='twoPass')
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")

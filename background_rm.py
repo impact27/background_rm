@@ -28,10 +28,12 @@ import cv2
 from scipy.special import erfinv
 import warnings
 import scipy
+import scipy.ndimage.measurements as msr
 sobel = scipy.ndimage.filters.sobel
 
 def remove_curve_background(im, bg, percentile=None, deg=2, *, 
-                            xOrientate=False, method='none', infoDict=None):
+                            xOrientate=False, method='none', infoDict=None,
+                            rotateAngle=None, mask=None):
     """flatten the image by removing the curve and the background fluorescence. 
     
     Parameters
@@ -47,12 +49,19 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         The polynomial fit Y and X degrees
     xOrientate: boolean, default False
         if True, will orientate the image along the x axis
-    twoPass: boolean, defaults False
-        Uses 2 pass to get flatter result. Do not use with detectChannel
-    detectChannel: boolean, default False
-        Tries to detect the channel.
+    method: string, defaults 'none'
+        Flattening improvement method.
+            'detectChannel': Detects the channel using outChannelMask
+            'gaussianBeam':  Detects the proteins using outGaussianBeamMask
+            'twoPass':       Applies two pass to detect the proteins 
+            'mask':          Takes the mask input for im and background
     infoDict: dictionnary
         If not None, will contain the infos on modification
+    rotateAngle: number
+        If using xOrientate or the 'detectChannel' or 'gaussianBeam' methods,
+        will determine the angle of the rotated image instead.
+        Use if the original image has weak features and is oriented along 
+        the axis.
     
     Returns
     -------
@@ -65,16 +74,22 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     TODO: this function takes almost 2 seconds for a single pair of 1000x1000
     matrices!!! 1.2 of which for folyfit2d! need to optimize that
     """
+    maskim=None
+    maskbg=None
     
     #create mask to detect the background
-    mask=None
-    if percentile is None:
-        mask=backgroundMask(im)
+    if method == 'mask' and mask is not None:
+        maskim=mask
+        maskbg=mask  
+    elif percentile is None:
+        maskim=backgroundMask(im)
+    if method != 'mask':
+        maskbg=backgroundMask(bg, nstd=6)
       
     #Flatten the image 
-    im=im/polyfit2d(im,deg,percentile, mask=mask)#
+    im=im/polyfit2d(im,deg,percentile, mask=maskim)#
     #Consider the background is flat (remove obvious dust)
-    bg=bg/polyfit2d(bg,deg,mask=backgroundMask(im, nstd=6))
+    bg=bg/polyfit2d(bg,deg,mask=maskbg)
     
     #if the image has any nans, replace by 1 (for fft)
     nanim=np.isnan(im)
@@ -85,7 +100,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     #Detect the image angle if needed
     angleOri=0
     if xOrientate or method == 'detectChannel' or method == 'gaussianBeam':    
-        angleOri=ir.orientation_angle(im)    
+        angleOri=ir.orientation_angle(im,rotateAngle=rotateAngle)
      
     #get angle scale and shift
     angle, scale, shift, __ = ir.register_images(im,bg)
@@ -427,7 +442,7 @@ def signalMask(im, r=2, blur=False):
     valid=np.logical_and(valid,finite)
     
     return valid
- 
+
 def polyfit2d(im, deg=2, percentile=None, mask=None):
     """Fit the function f to the degree deg
     
@@ -564,7 +579,50 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     #"""
     
     return np.dot(np.moveaxis(vander,0,-1),c)
+
+def getPeaks(im, nstd=6, maxsize=None):
+    """
+    Detects the peaks using edge detection
+    Parameters
+    ----------
+    im: 2d array
+        The image to fit
     
+    Returns
+    -------
+    peaks: 2d array
+        mask of the peaks location
+        
+    Notes
+    -----
+    Position of high slope and intern parts are marked
+    """
+    im=np.asarray(im,dtype='float')
+    imblur=np.empty(im.shape)
+    edge=cr.Scharr_edge(im, imblur=imblur)
+    threshold=np.nanmean(edge)+6*np.nanstd(edge)
+    peaks=edge>threshold
+    
+    labels,n=msr.label(peaks)
+    intensity_inclusions=msr.mean(imblur,labels,np.arange(n)+1)
+    print(intensity_inclusions)
+    for i in np.arange(n)+1:
+        high, m=msr.label(imblur>intensity_inclusions[i-1])
+        for j in np.unique(high[np.logical_and(labels==i,high>0)]):
+            labels[high==j]=i
+        
+        if maxsize is not None and np.sum(labels==i)>maxsize:
+            labels[labels==i]=0
+            
+            
+    #"""
+    from matplotlib.pyplot import figure, hist, plot, title, ylim
+    figure()
+    hist(edge[np.isfinite(edge)],100)
+    plot(threshold*np.array([1,1]),[0,ylim()[1]])
+    title(str(threshold))
+    #"""
+    return labels>0     
 #def polyfit2d_alt(im, deg=[2,2], percentile=100):
 #    """Fit the function f to the degree deg
 #    

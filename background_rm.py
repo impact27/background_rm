@@ -41,7 +41,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     im: 2d array
         The image with background and data
     bg: 2d array
-        The imabge with only background
+        The image with only background
     percentile: number 0-100, optional
         The percentage of the image covered by the background
         If None, the script uses morphological functions to find the proteins
@@ -605,17 +605,20 @@ def getPeaks(im, nstd=6, maxsize=None):
     
     labels,n=msr.label(peaks)
     intensity_inclusions=msr.mean(imblur,labels,np.arange(n)+1)
-    print(intensity_inclusions)
+    
     for i in np.arange(n)+1:
-        high, m=msr.label(imblur>intensity_inclusions[i-1])
-        for j in np.unique(high[np.logical_and(labels==i,high>0)]):
-            labels[high==j]=i
-        
-        if maxsize is not None and np.sum(labels==i)>maxsize:
+        if intensity_inclusions[i-1] > np.nanmean(imblur):
+            high, m=msr.label(imblur>intensity_inclusions[i-1])
+            for j in np.unique(high[np.logical_and(labels==i,high>0)]):
+                labels[high==j]=i
+            
+            if maxsize is not None and np.sum(labels==i)>maxsize:
+                labels[labels==i]=0
+        else:
             labels[labels==i]=0
             
             
-    #"""
+    """
     from matplotlib.pyplot import figure, hist, plot, title, ylim
     figure()
     hist(edge[np.isfinite(edge)],100)

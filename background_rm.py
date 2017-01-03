@@ -27,6 +27,7 @@ import numpy as np
 import cv2
 from scipy.special import erfinv
 import warnings
+warnings.filterwarnings('ignore', 'Mean of empty slice',RuntimeWarning)
 import scipy
 import scipy.ndimage.measurements as msr
 sobel = scipy.ndimage.filters.sobel
@@ -50,11 +51,10 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     xOrientate: boolean, default False
         if True, will orientate the image along the x axis
     method: string, defaults 'none'
-        Flattening improvement method.
+        Flattening improvement method. Ignored if mask is provided
             'detectChannel': Detects the channel using outChannelMask
             'gaussianBeam':  Detects the proteins using outGaussianBeamMask
             'twoPass':       Applies two pass to detect the proteins 
-            'mask':          Takes the mask input for im and background
     infoDict: dictionnary
         If not None, will contain the infos on modification
     rotateAngle: number
@@ -62,6 +62,8 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         will determine the angle of the rotated image instead.
         Use if the original image has weak features and is oriented along 
         the axis.
+    mask: 2d array of bool
+        Part of the image to use for flattening
     
     Returns
     -------
@@ -74,22 +76,26 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     TODO: this function takes almost 2 seconds for a single pair of 1000x1000
     matrices!!! 1.2 of which for folyfit2d! need to optimize that
     """
+    im=np.asarray(im,dtype=float)
+    bg=np.asarray(bg,dtype=float)
     maskim=None
     maskbg=None
     
     #create mask to detect the background
-    if method == 'mask' and mask is not None:
+    if mask is not None:
         maskim=mask
         maskbg=mask  
     elif percentile is None:
         maskim=backgroundMask(im)
-    if method != 'mask':
+    if mask is None:
         maskbg=backgroundMask(bg, nstd=6)
       
     #Flatten the image 
-    im=im/polyfit2d(im,deg,percentile, mask=maskim)#
+    imI=polyfit2d(im,deg,percentile, mask=maskim)
+    im=im/imI#
     #Consider the background is flat (remove obvious dust)
     bg=bg/polyfit2d(bg,deg,mask=maskbg)
+        
     
     #if the image has any nans, replace by 1 (for fft)
     nanim=np.isnan(im)
@@ -150,6 +156,10 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         infoDict['diffScale']=scale
         infoDict['offset']=shift
     
+    if mask is not None:
+       data+=1
+       data/=polyfit2d(data,deg,mask=mask)
+       data-=1
    
     """
     from matplotlib.pyplot import figure, plot
@@ -200,23 +210,21 @@ def outChannelMask(im, chAngle=0):
     if chAngle !=0:
         scharr= ir.rotate_scale(scharr, -chAngle,1,np.nan)
         
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")    
-            #get profile
-        prof=np.nanmean(scharr,1)
-        #get threshold
-        threshold=np.nanmean(prof)+3*np.nanstd(prof)
-        mprof=prof>threshold
-        edgeargs=np.flatnonzero(mprof)
-        
-        if edgeargs.size > 2:
-            mask=np.zeros(im.shape)
-            mask[edgeargs[0]-5:edgeargs[-1]+5,:]=2
-            if chAngle !=0:
-                mask= ir.rotate_scale(mask, chAngle,1,np.nan)
-            mask=np.logical_and(mask<1, np.isfinite(im))
-        else:
-            mask= None
+    #get profile
+    prof=np.nanmean(scharr,1)
+    #get threshold
+    threshold=np.nanmean(prof)+3*np.nanstd(prof)
+    mprof=prof>threshold
+    edgeargs=np.flatnonzero(mprof)
+    
+    if edgeargs.size > 2:
+        mask=np.zeros(im.shape)
+        mask[edgeargs[0]-5:edgeargs[-1]+5,:]=2
+        if chAngle !=0:
+            mask= ir.rotate_scale(mask, chAngle,1,np.nan)
+        mask=np.logical_and(mask<1, np.isfinite(im))
+    else:
+        mask= None
     return mask
     
 def outGaussianBeamMask(data, chAngle=0):
@@ -230,9 +238,7 @@ def outGaussianBeamMask(data, chAngle=0):
     gfilter=scipy.ndimage.filters.gaussian_filter1d
     
     #get profile
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  
-        profile=np.nanmean(ir.rotate_scale(data, -chAngle,1,np.nan),1)
+    profile=np.nanmean(ir.rotate_scale(data, -chAngle,1,np.nan),1)
     
     #guess position of max
     amax= profile.size//2
@@ -241,11 +247,9 @@ def outGaussianBeamMask(data, chAngle=0):
     X0=np.arange(profile.size)-amax
     Y0=profile
     
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore") 
-        #The cutting values are when the profiles goes below zero
-        rlim=np.flatnonzero(np.logical_and(Y0<0,X0>0))[0]
-        llim=np.flatnonzero(np.logical_and(Y0<0,X0<0))[-1]
+    #The cutting values are when the profiles goes below zero
+    rlim=np.flatnonzero(np.logical_and(Y0<0,X0>0))[0]
+    llim=np.flatnonzero(np.logical_and(Y0<0,X0<0))[-1]
     
     #We can now detect the true center
     fil=gfilter(profile,21)
@@ -277,9 +281,7 @@ def outGaussianBeamMask(data, chAngle=0):
     mask=np.ones(data.shape)
     mask[llim:rlim,:]=0
     mask= ir.rotate_scale(mask, chAngle,1,np.nan)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore") 
-        mask=np.logical_and(mask>.5, np.isfinite(data))
+    mask=np.logical_and(mask>.5, np.isfinite(data))
     return mask
     
     """
@@ -349,9 +351,7 @@ def backgroundTreshold(im, nstd=3):
         std=(-m)/np.sqrt(2)/erfinv(hist[0]/hist[:hm].sum()-1)
     else:
         #std everithing below mean
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            std=np.sqrt(((m-im[im<m])**2).mean())
+        std=np.sqrt(((m-im[im<m])**2).mean())
     #3 std should be good
     return m+nstd*std
  
@@ -389,9 +389,7 @@ def backgroundMask(im, r=2, blur=False, nstd=3):
     finite=np.isfinite(im)
     if blur:
         im=cv2.GaussianBlur(im,(2*r+1,2*r+1),0)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        valid=im<backgroundTreshold(im,nstd)
+    valid=im<backgroundTreshold(im,nstd)
     valid=np.asarray(valid,dtype="uint8")
     
     #remove dots in proteins (3px dots)
@@ -426,9 +424,7 @@ def signalMask(im, r=2, blur=False):
     if blur:
         im=cv2.GaussianBlur(im,(2*r+1,2*r+1),0)
         
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        valid=im>backgroundTreshold(im)
+    valid=im>backgroundTreshold(im)
     valid=np.asarray(valid,dtype="uint8")
 
     #remove dots in proteins (3px dots)
@@ -442,8 +438,78 @@ def signalMask(im, r=2, blur=False):
     valid=np.logical_and(valid,finite)
     
     return valid
+#@profile
+def polyfit2d(im,deg=2, percentile=None, *,x=None, y=None, mask=None):
+    """Fit the function f to the degree deg
+    
+    Parameters
+    ----------
+    im: 2d array
+        The image to fit
+    deg: integer, default 2
+        The polynomial degree to fit
+    percentile: number (0-100), optional
+        The percentage of the image covered by the background
+    mask: 2d boolean array
+        Alternative to percentile, valid values
+    
+    Returns
+    -------
+    im: 2d array
+        The fitted polynomial surface
+        
+    Notes
+    -----
+    To do a least square of the image, we need to minimize sumOverPixels (SOP)
+    ((fit-image)**2)
+    Where fit is a function of C_ij:
+        fit=sum_ij(C_ij * y**i * x**j)
+       
+    we define the Vandermonde matrix as follow:
+        V[i,j]=y**i * x**j
+        
+    where x and y are meshgrid of the y and x index
+    
+    So we want the derivate of SOP((fit-image)**2) relative to the C_ij
+    to be 0.
+    
+        d/dCij SOP((fit-image)**2) = 0 = 2*SOP((fit-image)*d/dC_ij fit)
+    
+    Therefore
+    
+        SOP(sum_kl(C_kl * V[k+i,l+j]))=SOP(image*V[i,j])
+        sum_kl(C_kl * SOP(V[k+i,l+j]))=SOP(image*V[i,j])
+    
+    Which is a simple matrix equation! A*C=B with A.size=(I+J)*(I+J),
+    C.size=B.size=I+J
+        
+    The sizes of the matrices are only of the order of deg**4
+    
+    The bottleneck is any operation on the images before the SOP 
+    """
+    psize=((deg+1)*(deg+2))//2
+    #vandermonde matrix
+    vander=np.empty((psize,*(im.shape)),dtype='float32')
+    
+    if mask is None and percentile is not None and percentile is not 100:
+        print('WARNING: Percentile will be removed for polyfit2d')
+        mask=im< np.nanpercentile(im,percentile)
+            
+    c=polyfit2dcoeff(im, deg=deg, mask=mask, vanderOut=vander,x=x,y=y)
+    
+    #Multiply the coefficient with the vandermonde matrix to find the result
+    ret=np.zeros(im.shape,dtype=c.dtype)
+    for coeff, mat in zip(c,vander):
+        ret+=coeff*mat
+    return ret
 
-def polyfit2d(im, deg=2, percentile=None, mask=None):
+def getidx(y,x, deg=2):
+    """function to order powers in psize"""
+    return ((2*(deg+1)+1)*y-y**2)//2+x
+           
+           
+       
+def polyfit2dcoeff(im, *,x=None, y=None, deg=2, mask=None, vanderOut=None):
     """Fit the function f to the degree deg
     
     Parameters
@@ -493,19 +559,21 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     """
     #clean input
     im = np.asarray(im,dtype='float32')  
-    
+    if x is None:
+        x=range(im.shape[1])
+    else:
+        assert(len(x)==im.shape[1])
+    if y is None:
+        y=range(im.shape[0])
+    else:
+        assert(len(y)==im.shape[0])
     #get x,y
-    x = np.asarray(range(im.shape[1]),dtype='float32')[np.newaxis,:]
-    y = np.asarray(range(im.shape[0]),dtype='float32')[:,np.newaxis]
+    x = np.asarray(x,dtype='float32')[np.newaxis,:]
+    y = np.asarray(y,dtype='float32')[:,np.newaxis]
     
     valid=np.isfinite(im)
     if mask is not None:
         valid=np.logical_and(valid,mask)
-                     
-    elif percentile is not None and percentile is not 100:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            valid=im< np.nanpercentile(im,percentile)
         
     if np.all(valid):
         valid=None
@@ -517,18 +585,18 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     #square instead of shape(psize) for readibility.
     #This will therefore be a upper triangular matrix
     SOPV=np.empty(((deg*2+1),(deg*2+1)),dtype='float32')
-    #vandermonde matrix
-    vander=np.empty((psize,*(im.shape)),dtype='float32')
+    if vanderOut is not None:
+        assert(vanderOut.shape==(psize,*(im.shape)))
+        vander=vanderOut
+    else:
+        #vandermonde matrix
+        vander=np.empty((psize,*(im.shape)),dtype='float32')
     #vandermonde matrix with all masked values =0
     vandermasked=np.empty((psize,*(im.shape)),dtype='float32')
     #Temp. matrix that will hold the current value of vandermonde
     vtmp=np.empty(im.shape,dtype='float32')
     #idem but with 0 on masked pixels
     vtmpmasked=np.empty(im.shape,dtype='float32')
-    
-    #function to order powers in psize
-    def getidx(y,x):
-        return ((2*(deg+1)+1)*y-y**2)//2+x
 
     #First thing is to compute the vandermonde matrix
     for yp in range(deg*2+1):
@@ -542,9 +610,9 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
                 SOPV[yp,xp]=vtmp.sum()
             
             if yp<deg+1 and xp <deg+1-yp:
-                vander[getidx(yp,xp),:,:]=vtmp
+                vander[getidx(yp,xp,deg),:,:]=vtmp
                 if valid is not None:
-                    vandermasked[getidx(yp,xp),:,:]=vtmpmasked
+                    vandermasked[getidx(yp,xp,deg),:,:]=vtmpmasked
     
     #Then compute the LHS of the least square equation
     A=np.zeros((psize,psize),dtype='float32')
@@ -552,7 +620,7 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
         for yj in range(deg+1):
             for xi in range(deg+1-yi):
                 for xj in range(deg+1-yj):
-                    A[getidx(yi,xi),getidx(yj,xj)]=SOPV[yi+yj,xi+xj]
+                    A[getidx(yi,xi,deg),getidx(yj,xj,deg)]=SOPV[yi+yj,xi+xj]
     
     #Set everithing invalid to 0 (as x*0 =0 works for any x)
     if valid is not None:
@@ -568,7 +636,6 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     
     #Solve
     c=np.linalg.solve(A, b)
-    #Multiply the coefficient with the vandermonde matrix to find the result
     
     """
     if valid is None:
@@ -578,7 +645,7 @@ def polyfit2d(im, deg=2, percentile=None, mask=None):
     imshow(valid)
     #"""
     
-    return np.dot(np.moveaxis(vander,0,-1),c)
+    return c
 
 def getPeaks(im, nstd=6, maxsize=None):
     """

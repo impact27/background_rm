@@ -19,11 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import background_rm as rmbg
 import matplotlib.image as mpimg
+import importlib
+importlib.reload(rmbg)
 
 #%% load images
 im=mpimg.imread('../Data/UVData/im0.tif')
 bg=mpimg.imread('../Data/UVData/ba_e1105qt5_500ms.tif')
-method='gaussianBeam'
+method=None
 #%%
-for i in range(10):
-    rmbg.remove_curve_background(bg,im,xOrientate=True, method=method)
+for i in range(1):
+    #rmbg.remove_curve_background(bg,im,xOrientate=True, method=method)
+    rmbg.polyfit2d(im,2)

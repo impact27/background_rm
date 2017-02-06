@@ -25,8 +25,8 @@ importlib.reload(rmbg)
 #%% load images
 im=mpimg.imread('../Data/UVData/im0.tif')
 bg=mpimg.imread('../Data/UVData/ba_e1105qt5_500ms.tif')
-method=None
+method='twoPass'
 #%%
 for i in range(1):
-    #rmbg.remove_curve_background(bg,im,xOrientate=True, method=method)
-    rmbg.polyfit2d(im,2)
+    rmbg.remove_curve_background(bg,im,xOrientate=True, method=method)
+#    rmbg.polyfit2d(im,2)

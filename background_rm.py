@@ -32,9 +32,9 @@ import scipy
 import scipy.ndimage.measurements as msr
 sobel = scipy.ndimage.filters.sobel
 
-def remove_curve_background(im, bg, percentile=None, deg=2, *, 
-                            xOrientate=False, method='none', infoDict=None,
-                            rotateAngle=None, mask=None):
+def remove_curve_background(im, bg, deg=2, *, 
+                            xOrientate=False, method=None, infoDict=None,
+                            rotateAngle=None, mask=None, percentile=None):
     """flatten the image by removing the curve and the background fluorescence. 
     
     Parameters
@@ -75,27 +75,30 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     for detectChannel, The channel should be clearly visible and straight.
     TODO: this function takes almost 2 seconds for a single pair of 1000x1000
     matrices!!! 1.2 of which for folyfit2d! need to optimize that
+    Consider the background is flat (remove obvious dust)
     """
-    im=np.asarray(im,dtype=float)
-    bg=np.asarray(bg,dtype=float)
-    maskim=None
-    maskbg=None
+    #Save im and bg as float32
+    im=np.asarray(im,dtype='float32')
+    bg=np.asarray(bg,dtype='float32')
+
     
     #create mask to detect the background
+    maskim=None
+    maskbg=None
     if mask is not None:
         maskim=mask
         maskbg=mask  
     elif percentile is None:
         maskim=backgroundMask(im)
+    elif percentile is not 100:
+        maskim=im< np.nanpercentile(im,percentile)
     if mask is None:
         maskbg=backgroundMask(bg, nstd=6)
       
-    #Flatten the image 
-    imI=polyfit2d(im,deg,percentile, mask=maskim)
-    im=im/imI#
-    #Consider the background is flat (remove obvious dust)
+    #Flatten the image and background
+    imI=polyfit2d(im,deg, mask=maskim)
+    im=im/imI
     bg=bg/polyfit2d(bg,deg,mask=maskbg)
-        
     
     #if the image has any nans, replace by 1 (for fft)
     nanim=np.isnan(im)
@@ -111,7 +114,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     #get angle scale and shift
     angle, scale, shift, __ = ir.register_images(im,bg)
     
-    #remove the previously added nans
+    #Reset the previously removed nans
     im[nanim]=np.nan
     bg[nanbg]=np.nan
     
@@ -122,28 +125,25 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
     if im.shape is not bg.shape:
         im, bg = same_size(im,bg)
         
-    #If detect channel, correct with channel and proceed
-    if method == 'detectChannel':
-        mask= outChannelMask(bg,angleOri)
-        if mask is not None:
-            im=im/polyfit2d(im,deg,mask=mask)
-            bg=bg/polyfit2d(bg,deg,mask=mask)   
-        
     #subtract background
     data=im-bg
-        
-    #If 2 pass, get flatter image and resubtract    
-    if method == 'twoPass':
+    
+    #Get mask to flatten data
+    if mask is not None:
+        pass
+    elif method == 'detectChannel':
+        mask= outChannelMask(bg,angleOri)   
+    elif method == 'twoPass':
         mask=backgroundMask(data,im.shape[0]//100,blur=True)
-        im=im/polyfit2d(im,deg,mask=mask)
-        #bg=bg/polyfit2d(bg,deg,mask=mask)
-        data=im-bg
     elif method == 'gaussianBeam':
         mask= outGaussianBeamMask(data,angleOri)
-        if mask is not None:
-            im=im/polyfit2d(im,deg,mask=mask)
-            bg=bg/polyfit2d(bg,deg,mask=mask)
-            data=im-bg
+    
+    #Flatten data
+    if mask is not None:
+       data+=1
+       data/=polyfit2d(data,deg,mask=mask)
+       data-=1
+        
                
     #if we want to orientate the image, do it now
     if xOrientate:
@@ -156,10 +156,7 @@ def remove_curve_background(im, bg, percentile=None, deg=2, *,
         infoDict['diffScale']=scale
         infoDict['offset']=shift
     
-    if mask is not None:
-       data+=1
-       data/=polyfit2d(data,deg,mask=mask)
-       data-=1
+
    
     """
     from matplotlib.pyplot import figure, plot
@@ -238,7 +235,9 @@ def outGaussianBeamMask(data, chAngle=0):
     gfilter=scipy.ndimage.filters.gaussian_filter1d
     
     #get profile
-    profile=np.nanmean(ir.rotate_scale(data, -chAngle,1,np.nan),1)
+    if chAngle!=0:
+        data=ir.rotate_scale(data, -chAngle,1,np.nan)
+    profile=np.nanmean(data,1)
     
     #guess position of max
     amax= profile.size//2
@@ -439,7 +438,7 @@ def signalMask(im, r=2, blur=False):
     
     return valid
 #@profile
-def polyfit2d(im,deg=2, percentile=None, *,x=None, y=None, mask=None):
+def polyfit2d(im,deg=2, *,x=None, y=None, mask=None):
     """Fit the function f to the degree deg
     
     Parameters
@@ -490,11 +489,7 @@ def polyfit2d(im,deg=2, percentile=None, *,x=None, y=None, mask=None):
     psize=((deg+1)*(deg+2))//2
     #vandermonde matrix
     vander=np.empty((psize,*(im.shape)),dtype='float32')
-    
-    if mask is None and percentile is not None and percentile is not 100:
-        print('WARNING: Percentile will be removed for polyfit2d')
-        mask=im< np.nanpercentile(im,percentile)
-            
+        
     c=polyfit2dcoeff(im, deg=deg, mask=mask, vanderOut=vander,x=x,y=y)
     
     #Multiply the coefficient with the vandermonde matrix to find the result
@@ -507,8 +502,7 @@ def getidx(y,x, deg=2):
     """function to order powers in psize"""
     return ((2*(deg+1)+1)*y-y**2)//2+x
            
-           
-       
+#@profile                
 def polyfit2dcoeff(im, *,x=None, y=None, deg=2, mask=None, vanderOut=None):
     """Fit the function f to the degree deg
     
@@ -606,6 +600,7 @@ def polyfit2dcoeff(im, *,x=None, y=None, deg=2, mask=None, vanderOut=None):
             if valid is not None:
                 np.multiply(vtmp,valid,out=vtmpmasked)
                 SOPV[yp,xp]=vtmpmasked.sum()
+                vtmp[valid]
             else:
                 SOPV[yp,xp]=vtmp.sum()
             
@@ -693,32 +688,7 @@ def getPeaks(im, nstd=6, maxsize=None):
     title(str(threshold))
     #"""
     return labels>0     
-#def polyfit2d_alt(im, deg=[2,2], percentile=100):
-#    """Fit the function f to the degree deg
-#    
-#    Parameters
-#    ----------
-#    im: 2d array
-#        The image to fit
-#    deg: 2 numbers, defaults [2,2]
-#        The Y and X polynomial degrees to fit
-#    percentile: number, optional
-#        The percentage of the image covered by the background
-#    
-#    Returns
-#    -------
-#    im: 2d array
-#        The fitted polynomial surface
-#        
-#    Notes
-#    -----
-#    Ignore everithing above percentile
-#    This is kind of wrong as y^2 * x^2 is not 2nd degree...
-#    """
-#    #clean input
-#    deg = np.asarray(deg)
-#    im = np.asarray(im)  
-#    im = cv2.GaussianBlur(im,(11,11),0)
+
 #    #get x,y
 #    x = np.asarray(range(im.shape[1]))
 #    y = np.asarray(range(im.shape[0]))

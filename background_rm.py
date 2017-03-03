@@ -600,7 +600,6 @@ def polyfit2dcoeff(im, *,x=None, y=None, deg=2, mask=None, vanderOut=None):
             if valid is not None:
                 np.multiply(vtmp,valid,out=vtmpmasked)
                 SOPV[yp,xp]=vtmpmasked.sum()
-                vtmp[valid]
             else:
                 SOPV[yp,xp]=vtmp.sum()
             

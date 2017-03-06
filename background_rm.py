@@ -278,9 +278,23 @@ def outGaussianBeamMask(data, chAngle=0):
     
     #get mask
     mask=np.ones(data.shape)
-    mask[llim:rlim,:]=0
-    mask= ir.rotate_scale(mask, chAngle,1,np.nan)
-    mask=np.logical_and(mask>.5, np.isfinite(data))
+    
+    if chAngle!=0:
+        idx=np.indices(mask.shape)
+        
+        
+        idx[1]-=mask.shape[1]//2
+        idx[0]-=mask.shape[0]//2
+        X=np.cos(chAngle)*idx[1]+np.sin(chAngle)*idx[0]
+        Y=np.cos(chAngle)*idx[0]-np.sin(chAngle)*idx[1]
+        
+        mask[np.abs(Y-mean+mask.shape[0]//2)<dist]=0
+        
+    else:    
+        mask[llim:rlim,:]=0
+    
+    #mask=np.logical_and(mask>.5, np.isfinite(data))
+    mask=mask>.5
     return mask
     
     """
@@ -293,6 +307,8 @@ def outGaussianBeamMask(data, chAngle=0):
     plt.plot([llim-mean,llim-mean],[np.nanmin(Y0),np.nanmax(Y0)],'r')
     plt.plot([rlim-mean,rlim-mean],[np.nanmin(Y0),np.nanmax(Y0)],'r')
     #"""
+    
+    
     
 def same_size(im0,im1):    
     """Pad with nans to get similarely shaped matrix

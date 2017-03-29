@@ -34,8 +34,8 @@ sobel = scipy.ndimage.filters.sobel
 
 def remove_curve_background(im, bg, deg=2, *, 
                             maskim=None, maskbg=None, infoDict=None,
-                            xOrientate=False,rotateAngle=None, percentile=None,
-                            reflatten=True, twoPass=False,bgCoord=False):
+                            bgCoord=False, percentile=None,
+                            reflatten=True):
     """flatten the image by removing the curve and the background fluorescence. 
     
     Parameters
@@ -93,12 +93,13 @@ def remove_curve_background(im, bg, deg=2, *,
         maskim=maskbg
 
     #if no mask is provided, guess them
+    twoPass=False
     if maskim is None:
+        twoPass=True
         if percentile is None:
             maskim=backgroundMask(im)
         elif percentile is not 100:
-            maskim=im< np.nanpercentile(im,percentile)  
-    if maskbg is None:
+            maskim=im< np.nanpercentile(im,percentile)
         maskbg=backgroundMask(bg, nstd=6)
       
     #Flatten the image and background
@@ -108,11 +109,6 @@ def remove_curve_background(im, bg, deg=2, *,
     #Replace nans to do registration
     im[nanim]=1
     bg[nanbg]=1
-
-    #Detect the image angle if needed
-    angleOri=0
-    if xOrientate:    
-        angleOri=ir.orientation_angle(im,rotateAngle=rotateAngle)
      
     #get angle scale and shift
     angle, scale, shift, __ = ir.register_images(im,bg)
@@ -136,32 +132,33 @@ def remove_curve_background(im, bg, deg=2, *,
     data=im-bg
     
     #Get mask to flatten data
-    if reflatten:
-        mask=maskim
-        if bgCoord:
-            mask=maskbg
+    if reflatten:   
         if twoPass:
             mask=backgroundMask(data,im.shape[0]//100,blur=True)
-        
+        elif bgCoord:
+            mask=maskbg
+        else:
+            mask=maskim
         #Flatten data
         data+=1
         data/=polyfit2d(data,deg,mask=mask)
         data-=1
         
-               
-    #if we want to orientate the image, do it now
-    if xOrientate:
-        #rotate
-        data=ir.rotate_scale(data,-angleOri,1, borderValue=np.nan)
-        
     if infoDict is not None:
-        infoDict['imageAngle']=angleOri
         infoDict['diffAngle']=angle
         infoDict['diffScale']=scale
         infoDict['offset']=shift
     
 
-   
+    """
+    from matplotlib.pyplot import figure, imshow
+    figure()
+    imshow(im)
+    imshow(maskim,alpha=.5,cmap='Reds')
+    figure()
+    imshow(bg)
+    imshow(maskbg,alpha=.5,cmap='Reds')
+    #"""
     """
     from matplotlib.pyplot import figure, plot
     im[np.isnan(data)]=np.nan

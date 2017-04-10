@@ -28,6 +28,7 @@ import cv2
 from scipy.special import erfinv
 import warnings
 warnings.filterwarnings('ignore', 'Mean of empty slice',RuntimeWarning)
+warnings.filterwarnings('ignore', 'invalid value encountered in less',RuntimeWarning)
 import scipy
 import scipy.ndimage.measurements as msr
 sobel = scipy.ndimage.filters.sobel

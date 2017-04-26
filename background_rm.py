@@ -27,11 +27,12 @@ import numpy as np
 import cv2
 from scipy.special import erfinv
 import warnings
-warnings.filterwarnings('ignore', 'Mean of empty slice',RuntimeWarning)
-warnings.filterwarnings('ignore', 'invalid value encountered in less',RuntimeWarning)
 import scipy
 import scipy.ndimage.measurements as msr
 sobel = scipy.ndimage.filters.sobel
+warnings.filterwarnings('ignore', 'Mean of empty slice',RuntimeWarning)
+warnings.filterwarnings('ignore', 'invalid value encountered in less',
+                        RuntimeWarning)
 
 def remove_curve_background(im, bg, deg=2, *, 
                             maskim=None, maskbg=None, infoDict=None,
@@ -45,39 +46,27 @@ def remove_curve_background(im, bg, deg=2, *,
         The image with background and data
     bg: 2d array
         The image with only background
-    percentile: number 0-100, optional
-        The percentage of the image covered by the background
-        If None, the script uses morphological functions to find the proteins
-    deg: 2 numbers, default [2,2]
-        The polynomial fit Y and X degrees
-    xOrientate: boolean, default False
-        if True, will orientate the image along the x axis
-    method: string, defaults 'none'
-        Flattening improvement method. Ignored if mask is provided
-            'detectChannel': Detects the channel using outChannelMask
-            'gaussianBeam':  Detects the proteins using outGaussianBeamMask
-            'twoPass':       Applies two pass to detect the proteins 
+    deg: integer, default 2
+        The polynomial degree to flatten the image
+    maskim: 2d array of bool, default None
+        Part of the image to use for flattening
+    maskbg: 2d array of bool, default None
+        Part of the background to use for flattening, 
+        if None, takes the value of maskim
     infoDict: dictionnary
         If not None, will contain the infos on modification
-    rotateAngle: number
-        If using xOrientate or the 'detectChannel' or 'gaussianBeam' methods,
-        will determine the angle of the rotated image instead.
-        Use if the original image has weak features and is oriented along 
-        the axis.
-    mask: 2d array of bool
-        Part of the image to use for flattening
+    bgCoord: bool, default False
+        Use background image coordinates instead of image coordinates
+    percentile: number 0-100, optional
+        The percentage of the image covered by the background
+        It is used if mskim is not given to try to ignore the signal
+    reflatten: Bool, default True
+        Reflatten after background subtraction to get a flatter result
     
     Returns
     -------
-    im: 2d array
+    output: 2d array
         The image with background removed
-        
-    Notes
-    -----
-    for detectChannel, The channel should be clearly visible and straight.
-    TODO: this function takes almost 2 seconds for a single pair of 1000x1000
-    matrices!!! 1.2 of which for folyfit2d! need to optimize that
-    Consider the background is flat (remove obvious dust)
     """
     #Save im and bg as float32
     im=np.asarray(im,dtype='float32')
@@ -120,7 +109,8 @@ def remove_curve_background(im, bg, deg=2, *,
     
     if bgCoord:
         #move image
-        im=ir.rotate_scale_shift(im,-angle,1/scale,-np.array(shift), borderValue=np.nan)
+        im=ir.rotate_scale_shift(im,-angle,1/scale,-np.array(shift), 
+                                 borderValue=np.nan)
     else:
         #move background
         bg=ir.rotate_scale_shift(bg,angle,scale,shift, borderValue=np.nan)
@@ -212,6 +202,8 @@ def backgroundTreshold(im, nstd=3):
     ----------
     im: 2d array
         The image
+    nstd: integer
+        Number of standard deviations to use as a threshold
         
     Returns
     -------
@@ -233,7 +225,7 @@ def backgroundTreshold(im, nstd=3):
     else:
         #std everithing below mean
         std=np.sqrt(((m-im[im<m])**2).mean())
-    #3 std should be good
+
     return m+nstd*std
  
 def getCircle(r):
@@ -260,6 +252,10 @@ def backgroundMask(im, r=2, blur=False, nstd=3):
         The image
     r: uint
         The radius used to fill the gaps
+    blur: Bool, default False
+        Should the image be blurred before processing?
+    nstd: integer
+        Number of standard deviations to use as a threshold
         
     Returns
     -------
@@ -294,6 +290,8 @@ def signalMask(im, r=2, blur=False):
         The image
     r: uint
         The radius used to fill the gaps
+    blur: Bool, default False
+        Should the image be blurred before processing?
         
     Returns
     -------
@@ -329,9 +327,11 @@ def polyfit2d(im,deg=2, *,x=None, y=None, mask=None):
         The image to fit
     deg: integer, default 2
         The polynomial degree to fit
-    percentile: number (0-100), optional
-        The percentage of the image covered by the background
-    mask: 2d boolean array
+    x: 1d array
+        X position
+    y: 1d array
+        Y positions
+    mask: 2d boolean array, default None
         Alternative to percentile, valid values
     
     Returns
@@ -339,34 +339,6 @@ def polyfit2d(im,deg=2, *,x=None, y=None, mask=None):
     im: 2d array
         The fitted polynomial surface
         
-    Notes
-    -----
-    To do a least square of the image, we need to minimize sumOverPixels (SOP)
-    ((fit-image)**2)
-    Where fit is a function of C_ij:
-        fit=sum_ij(C_ij * y**i * x**j)
-       
-    we define the Vandermonde matrix as follow:
-        V[i,j]=y**i * x**j
-        
-    where x and y are meshgrid of the y and x index
-    
-    So we want the derivate of SOP((fit-image)**2) relative to the C_ij
-    to be 0.
-    
-        d/dCij SOP((fit-image)**2) = 0 = 2*SOP((fit-image)*d/dC_ij fit)
-    
-    Therefore
-    
-        SOP(sum_kl(C_kl * V[k+i,l+j]))=SOP(image*V[i,j])
-        sum_kl(C_kl * SOP(V[k+i,l+j]))=SOP(image*V[i,j])
-    
-    Which is a simple matrix equation! A*C=B with A.size=(I+J)*(I+J),
-    C.size=B.size=I+J
-        
-    The sizes of the matrices are only of the order of deg**4
-    
-    The bottleneck is any operation on the images before the SOP 
     """
     psize=((deg+1)*(deg+2))//2
     #vandermonde matrix
@@ -381,7 +353,21 @@ def polyfit2d(im,deg=2, *,x=None, y=None, mask=None):
     return ret
 
 def getidx(y,x, deg=2):
-    """function to order powers in psize"""
+    """helper function to order powers in psize
+    
+     Parameters
+    ----------
+    y: integer
+        y position
+    x: integer
+        x position
+    deg: integer, default 2
+        The power
+    
+    Returns
+    -------
+    idx: integer
+        The correct index"""
     return ((2*(deg+1)+1)*y-y**2)//2+x
            
 #@profile                
@@ -392,12 +378,16 @@ def polyfit2dcoeff(im, *,x=None, y=None, deg=2, mask=None, vanderOut=None):
     ----------
     im: 2d array
         The image to fit
+    x: 1d array
+        X position
+    y: 1d array
+        Y positions
     deg: integer, default 2
         The polynomial degree to fit
-    percentile: number (0-100), optional
-        The percentage of the image covered by the background
     mask: 2d boolean array
         Alternative to percentile, valid values
+    vanderOut: 2d array
+        Outpts vander matrix if requested    
     
     Returns
     -------
@@ -530,6 +520,10 @@ def getPeaks(im, nstd=6, maxsize=None):
     ----------
     im: 2d array
         The image to fit
+    nstd: integer, default 6
+        Number of STD to use for theshold
+    maxsize: integer
+        Maximim size of the peak
     
     Returns
     -------

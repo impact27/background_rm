@@ -1,0 +1,2 @@
+include README.md
+include background_rm/tests/test_data/*

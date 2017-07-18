@@ -25,15 +25,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ##############REPLACE NAMES HERE############################
 #image name goes through glob => use * if you want
-imagefn='/Users/quentinpeter/Documents/PHD/Python/Sizing/Data/20161027_BSA_timecourse/100nM_BSA_2000ms_250ulph/0/Pos0/img_000000000_Default_000.tif'
-backgroundfn='/Users/quentinpeter/Documents/PHD/Python/Sizing/Data/20161027_BSA_timecourse/background_Exposure2000ms/0.tif'
-outputfn='/Users/quentinpeter/Desktop/output'
+imagefn='../Data/Maya/3.tif'
+backgroundfn='../Data/Maya/3_background.tif'
+outputfn='output'
 
 #the percentile is the approximate area of the image covered by background
 percentile=None
 blur=False
-xOrientate=False
-method='twoPass'
 printInfos=True
 ############################################################
 
@@ -57,7 +55,7 @@ imgs=[mpimg.imread(fn) for fn in glob(imagefn)]
 for i, im in enumerate(imgs):
     #remove background
     output=rmbg.remove_curve_background(im,bg,percentile=percentile, 
-                                        xOrientate=xOrientate, method=method)
+                                         )
     
     #blur if asked
     if blur:

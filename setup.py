@@ -42,6 +42,7 @@ setup(name='background_rm',
           'opencv-python',
           'registrator'
       ],
+      dependency_links=['https://github.com/impact27/registrator'], 
       test_suite='nose.collector',
       tests_require=['nose', 'nose-cover3'],
       include_package_data=True,

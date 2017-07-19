@@ -21,8 +21,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-import image_registration.image as ir
-import image_registration.channel as cr
+import registrator.image as ir
+import registrator.channel as cr
 import numpy as np
 import cv2
 from scipy.special import erfinv

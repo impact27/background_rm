@@ -40,7 +40,7 @@ setup(name='background_rm',
           'numpy',
           'scipy',
           'opencv-python',
-          'image_registration'
+          'registrator'
       ],
       test_suite='nose.collector',
       tests_require=['nose', 'nose-cover3'],

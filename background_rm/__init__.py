@@ -93,12 +93,22 @@ def remove_curve_background(im, bg, deg=2, *,
         maskbg=backgroundMask(bg, nstd=6)
       
     #Flatten the image and background
-    im=im/polyfit2d(im,deg, mask=maskim)
-    bg=bg/polyfit2d(bg,deg,mask=maskbg)
+    fim = polyfit2d(im, deg, mask=maskim)
+    fbg = polyfit2d(bg, deg, mask=maskbg)
+    
+    if np.any(fim<=0):
+        raise "Image mask too small"
+        
+    if np.any(fbg<=0):
+        raise "Background mask too small"
+    
+    im=im/fim
+    bg=bg/fbg
     
     #Replace nans to do registration
     im[nanim]=1
     bg[nanbg]=1
+    
      
     #get angle scale and shift
     angle, scale, shift, __ = ir.register_images(im,bg)

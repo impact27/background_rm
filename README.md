@@ -13,11 +13,7 @@ The background in UV images can be disturbing for measurments.
 
 ## Installation
 
-Add this package to the python path
-
-or run on mac (and linux?)
-
-ln -s $(pwd)/background_rm.py /usr/local/lib/python3.5/site-packages/
+pip install .
 
 ## API Reference
 

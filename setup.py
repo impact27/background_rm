@@ -36,7 +36,6 @@ setup(name='background_rm',
       author_email='qaep2@cam.ac.uk',
       license='GPl v3',
       packages=['background_rm'],
-      dependency_links=['https://github.com/impact27/registrator/tarball/master#egg=registrator-0.1.0'], 
       install_requires=[
           'numpy',
           'scipy',

@@ -72,10 +72,11 @@ def remove_curve_background(im, bg, deg=2, *,
     # Save im and bg as float32
     im = np.asarray(im, dtype='float32')
     bg = np.asarray(bg, dtype='float32')
-
-    # if the image has any nans (for fft)
-    nanim = np.isnan(im)
-    nanbg = np.isnan(bg)
+    
+    squeeze = False
+    if len(np.shape(im)) == 2:
+        squeeze = True
+        im = im[np.newaxis]
 
     # Get the masks in order
     if maskim is not None and maskbg is None:
@@ -87,10 +88,11 @@ def remove_curve_background(im, bg, deg=2, *,
     twoPass = False
     if maskim is None:
         twoPass = True
+        single_im = np.nanmean(im,0)
         if percentile is None:
-            maskim = backgroundMask(im)
+            maskim = backgroundMask(single_im)
         elif percentile is not 100:
-            maskim = im < np.nanpercentile(im, percentile)
+            maskim = single_im < np.nanpercentile(single_im, percentile)
         maskbg = backgroundMask(bg, nstd=6)
 
     # Flatten the image and background
@@ -105,37 +107,21 @@ def remove_curve_background(im, bg, deg=2, *,
 
     im = im / fim
     bg = bg / fbg
-
-    # Replace nans to do registration
-    im[nanim] = 1
-    bg[nanbg] = 1
-
-    # get angle scale and shift
-    angle, scale, shift, __ = ir.register_images(im, bg)
-
-    # Reset the previously removed nans
-    im[nanim] = np.nan
-    bg[nanbg] = np.nan
-
-    if bgCoord:
-        # move image
-        im = ir.rotate_scale_shift(im, -angle, 1 / scale, -np.array(shift),
-                                   borderValue=np.nan)
-    else:
-        # move background
-        bg = ir.rotate_scale_shift(bg, angle, scale, shift, borderValue=np.nan)
+    
+    im, bg = align(im, bg, bgCoord, infoDict)
 
     # resize if shape is not equal
-    if im.shape is not bg.shape:
+    if im.shape[-2:] != bg.shape:
         im, bg = same_size(im, bg)
 
     # subtract background
-    data = im - bg
+    data = im - bg[np.newaxis]
 
     # Get mask to flatten data
     if reflatten:
         if twoPass:
-            mask = backgroundMask(data, im.shape[0] // 100, blur=True)
+            single_data = np.nanmean(data, 0)
+            mask = backgroundMask(single_data, im.shape[-2] // 100, blur=True)
         elif bgCoord:
             mask = maskbg
         else:
@@ -145,10 +131,7 @@ def remove_curve_background(im, bg, deg=2, *,
         data /= polyfit2d(data, deg, mask=mask)
         data -= 1
 
-    if infoDict is not None:
-        infoDict['diffAngle'] = angle
-        infoDict['diffScale'] = scale
-        infoDict['offset'] = shift
+    
 
     """
     from matplotlib.pyplot import figure, imshow
@@ -173,36 +156,87 @@ def remove_curve_background(im, bg, deg=2, *,
     #"""
 
     # return result
+    if squeeze:
+        data = np.squeeze(data)
+        if infoDict is not None:
+            infoDict['diffAngle'] = np.squeeze(infoDict['diffAngle'])
+            infoDict['diffScale'] = np.squeeze(infoDict['diffScale'])
+            infoDict['offset'] = np.squeeze(infoDict['offset'])
     return data
 
-
-def same_size(im0, im1):
+def align(ims, bg, bgCoord=False, infoDict=None):
+    # if the image has any nans (for fft)
+    nanim = np.isnan(ims)
+    nanbg = np.isnan(bg)
+    
+    # Replace nans to do registration
+    ims[nanim] = 1
+    bg[nanbg] = 1
+    
+    if infoDict is not None:
+        infoDict['diffAngle'] = []
+        infoDict['diffScale'] = []
+        infoDict['offset'] = []
+    
+    for i, im in enumerate(ims):
+        # get angle scale and shift
+        angle, scale, shift, __ = ir.register_images(im, bg)
+    
+        # Reset the previously removed nans
+        im[nanim[i]] = np.nan
+        bg[nanbg] = np.nan
+    
+        if bgCoord:
+            # move image
+            im = ir.rotate_scale_shift(im, -angle, 1 / scale, -np.array(shift),
+                                       borderValue=np.nan)
+        else:
+            # move background
+            bg = ir.rotate_scale_shift(bg, angle, scale, shift,
+                                       borderValue=np.nan)
+        
+        if infoDict is not None:
+            infoDict['diffAngle'].append(angle)
+            infoDict['diffScale'].append(scale)
+            infoDict['offset'].append(shift)
+        
+    return ims, bg
+    
+def same_size(ims, bg):
     """Pad with nans to get similarely shaped matrix
 
     Parameters
     ----------
-    im0: 2d array
+    ims: 2d array
         First image
-    im1: 2d array
+    bg: 2d array
         Second image
 
     Returns
     -------
-    im0: 2d array
+    ims: 2d array
         First image
-    im1: 2d array
+    bg: 2d array
         Second image
 
     """
-    shape = [max(im0.shape[0], im1.shape[0]), max(im0.shape[1], im1.shape[1])]
-    im0 = cv2.copyMakeBorder(im0, 0, shape[0] - im0.shape[0],
-                             0, shape[1] - im0.shape[1],
-                             borderType=cv2.BORDER_CONSTANT, value=np.nan)
-    im1 = cv2.copyMakeBorder(im1, 0, shape[0] - im1.shape[0],
-                             0, shape[1] - im1.shape[1],
-                             borderType=cv2.BORDER_CONSTANT, value=np.nan)
+    shape = [max(ims.shape[-2], bg.shape[-2]), 
+             max(ims.shape[-1], bg.shape[-1])]
+    
+    ims_out = np.empty((ims.shape[0], *shape)) * np.nan
+    ims_out[:, :ims.shape[-2], :ims.shape[-1]] = ims
+    
+    bg_out = np.empty(shape) * np.nan
+    bg_out[:bg.shape[0], :bg.shape[1]] = bg
+    
+#    ims = cv2.copyMakeBorder(ims, 0, shape[0] - ims.shape[0],
+#                             0, shape[1] - ims.shape[1],
+#                             borderType=cv2.BORDER_CONSTANT, value=np.nan)
+#    bg = cv2.copyMakeBorder(bg, 0, shape[0] - bg.shape[0],
+#                             0, shape[1] - bg.shape[1],
+#                             borderType=cv2.BORDER_CONSTANT, value=np.nan)
 
-    return im0, im1
+    return ims_out, bg_out
 
 
 def backgroundTreshold(im, nstd=3):
@@ -359,11 +393,13 @@ def polyfit2d(ims, deg=2, *, x=None, y=None, mask=None):
 
     valid = np.isfinite(ims)
     if len(ims.shape) == 3:
-        valid = np.sum(valid, -1) == ims.shape[2]
+        valid = np.sum(valid, 0) == ims.shape[0]
     if mask is not None:
         valid = np.logical_and(valid, mask)
     
+    squeeze = False
     if len(np.shape(ims)) == 2:
+        squeeze = True
         ims = ims[np.newaxis]
 
     if not hasattr(polyfit2d, 'LHS') or np.any(polyfit2d.valid != valid):
@@ -379,7 +415,9 @@ def polyfit2d(ims, deg=2, *, x=None, y=None, mask=None):
         # Multiply the coefficient with the vandermonde matrix
         for coeff, mat in zip(c, vander):
             ret += coeff * mat
-    return np.squeeze(ret_array)
+    if squeeze:
+        ret_array = np.squeeze(ret_array)
+    return ret_array
 
 def getidx(y, x, deg=2):
     """helper function to order powers in psize

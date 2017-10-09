@@ -330,10 +330,10 @@ def signalMask(im, r=2, blur=False):
     valid = np.logical_and(valid, finite)
 
     return valid
+
+
 #@profile
-
-
-def polyfit2d(im, deg=2, *, x=None, y=None, mask=None):
+def polyfit2d(ims, deg=2, *, x=None, y=None, mask=None):
     """Fit the function f to the degree deg
 
     Parameters
@@ -355,18 +355,31 @@ def polyfit2d(im, deg=2, *, x=None, y=None, mask=None):
         The fitted polynomial surface
 
     """
-    psize = ((deg + 1) * (deg + 2)) // 2
-    # vandermonde matrix
-    vander = np.empty((psize, *(im.shape)), dtype='float32')
+    ims = np.asarray(ims, 'float32')
 
-    c = polyfit2dcoeff(im, deg=deg, mask=mask, vanderOut=vander, x=x, y=y)
+    valid = np.isfinite(ims)
+    if len(ims.shape) == 3:
+        valid = np.sum(valid, -1) == ims.shape[2]
+    if mask is not None:
+        valid = np.logical_and(valid, mask)
+    
+    if len(np.shape(ims)) == 2:
+        ims = ims[np.newaxis]
 
-    # Multiply the coefficient with the vandermonde matrix to find the result
-    ret = np.zeros(im.shape, dtype=c.dtype)
-    for coeff, mat in zip(c, vander):
-        ret += coeff * mat
-    return ret
-
+    if not hasattr(polyfit2d, 'LHS') or np.any(polyfit2d.valid != valid):
+        polyfit2d.LHS = polyfit2dLHS(
+                ims.shape[1:], deg=deg, mask=valid, x=x, y=y)
+        polyfit2d.valid = valid
+        
+    vander, vandermasked, A = polyfit2d.LHS
+    ret_array = np.zeros_like(ims)
+    
+    for ret, im in zip(ret_array, ims):
+        c = solvePolyFit2d(im, valid, vandermasked, A)
+        # Multiply the coefficient with the vandermonde matrix
+        for coeff, mat in zip(c, vander):
+            ret += coeff * mat
+    return np.squeeze(ret_array)
 
 def getidx(y, x, deg=2):
     """helper function to order powers in psize
@@ -386,10 +399,11 @@ def getidx(y, x, deg=2):
         The correct index"""
     return ((2 * (deg + 1) + 1) * y - y**2) // 2 + x
 
+
+
 #@profile
-
-
-def polyfit2dcoeff(im, *, x=None, y=None, deg=2, mask=None, vanderOut=None):
+def polyfit2dLHS(shape, *, x=None, y=None, deg=2, mask=None,
+                   dtype='float32'):
     """Fit the function f to the degree deg
 
     Parameters
@@ -441,82 +455,74 @@ def polyfit2dcoeff(im, *, x=None, y=None, deg=2, mask=None, vanderOut=None):
 
     The bottleneck is any operation on the images before the SOP
     """
-    # clean input
-    im = np.asarray(im, dtype='float32')
+    masked = not np.all(mask)
     if x is None:
-        x = range(im.shape[1])
+        x = range(shape[1])
     else:
-        assert(len(x) == im.shape[1])
+        assert(len(x) == shape[1])
     if y is None:
-        y = range(im.shape[0])
+        y = range(shape[0])
     else:
-        assert(len(y) == im.shape[0])
+        assert(len(y) == shape[0])
     # get x,y
-    x = np.asarray(x, dtype='float32')[np.newaxis, :]
-    y = np.asarray(y, dtype='float32')[:, np.newaxis]
-
-    valid = np.isfinite(im)
-    if mask is not None:
-        valid = np.logical_and(valid, mask)
-
-    if np.all(valid):
-        valid = None
+    x = np.asarray(x, dtype=dtype)[np.newaxis, :]
+    y = np.asarray(y, dtype=dtype)[:, np.newaxis]
 
     # Number of x and y power combinations
     psize = ((deg + 1) * (deg + 2)) // 2
     # This will hold the sum of the vandermonde matrix,
     # square instead of shape(psize) for readibility.
     # This will therefore be a upper triangular matrix
-    SOPV = np.empty(((deg * 2 + 1), (deg * 2 + 1)), dtype='float32')
-    if vanderOut is not None:
-        assert(vanderOut.shape == (psize, *(im.shape)))
-        vander = vanderOut
-    else:
-        # vandermonde matrix
-        vander = np.empty((psize, *(im.shape)), dtype='float32')
+    SOPV = np.empty(((deg * 2 + 1), (deg * 2 + 1)), dtype=dtype)
+    # vandermonde matrix
+    vander = np.empty((psize, *shape), dtype=dtype)
     # vandermonde matrix with all masked values =0
-    vandermasked = np.empty((psize, *(im.shape)), dtype='float32')
+    vandermasked = np.empty((psize, *shape), dtype=dtype)
     # Temp. matrix that will hold the current value of vandermonde
-    vtmp = np.empty(im.shape, dtype='float32')
+    vtmp = np.empty(shape, dtype=dtype)
     # idem but with 0 on masked pixels
-    vtmpmasked = np.empty(im.shape, dtype='float32')
+    vtmpmasked = np.empty(shape, dtype=dtype)
 
     # First thing is to compute the vandermonde matrix
     for yp in range(deg * 2 + 1):
         for xp in range(deg * 2 + 1 - yp):
             # There is no clear need to recompute that each time
             np.dot((y**yp), (x**xp), out=vtmp)
-            if valid is not None:
-                np.multiply(vtmp, valid, out=vtmpmasked)
+            if masked:
+                np.multiply(vtmp, mask, out=vtmpmasked)
                 SOPV[yp, xp] = vtmpmasked.sum()
             else:
                 SOPV[yp, xp] = vtmp.sum()
 
             if yp < deg + 1 and xp < deg + 1 - yp:
                 vander[getidx(yp, xp, deg), :, :] = vtmp
-                if valid is not None:
+                if masked:
                     vandermasked[getidx(yp, xp, deg), :, :] = vtmpmasked
 
     # Then compute the LHS of the least square equation
-    A = np.zeros((psize, psize), dtype='float32')
+    A = np.zeros((psize, psize), dtype=dtype)
     for yi in range(deg + 1):
         for yj in range(deg + 1):
             for xi in range(deg + 1 - yi):
                 for xj in range(deg + 1 - yj):
                     A[getidx(yi, xi, deg), getidx(yj, xj, deg)
                       ] = SOPV[yi + yj, xi + xj]
+    
+    if not masked:
+        vandermasked = vander
+             
+    return vander, vandermasked, A
+#@profile
+def solvePolyFit2d(im, mask, vandermasked, A):
 
     # Set everithing invalid to 0 (as x*0 =0 works for any x)
-    if valid is not None:
-        d = im.copy()
-        d[np.logical_not(valid)] = 0
-    else:
-        d = im
-        vandermasked = vander
+    if not np.all(mask):
+        im = im.copy()
+        im[np.logical_not(mask)] = 0
 
     # Get the RHS of the least square equation
     b = np.dot(np.reshape(vandermasked, (vandermasked.shape[0], -1)),
-               np.reshape(d, (-1,)))
+               np.reshape(im, (-1,)))
 
     # Solve
     c = np.linalg.solve(A, b)

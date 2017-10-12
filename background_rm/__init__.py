@@ -108,14 +108,7 @@ def remove_curve_background(im, bg, deg=2, *,
     im = im / fim
     bg = bg / fbg
     
-    im, bg = align(im, bg, bgCoord, infoDict)
-
-    # resize if shape is not equal
-    if im.shape[-2:] != bg.shape:
-        im, bg = same_size(im, bg)
-
-    # subtract background
-    data = im - bg[np.newaxis]
+    data = align(im, bg, bgCoord, infoDict)
 
     # Get mask to flatten data
     if reflatten:
@@ -164,21 +157,24 @@ def remove_curve_background(im, bg, deg=2, *,
             infoDict['offset'] = np.squeeze(infoDict['offset'])
     return data
 
-def align(ims, bg, bgCoord=False, infoDict=None):
+def align(images, background, bgCoord=False, infoDict=None):
     # if the image has any nans (for fft)
-    nanim = np.isnan(ims)
-    nanbg = np.isnan(bg)
+    nanim = np.isnan(images)
+    nanbg = np.isnan(background)
     
-    # Replace nans to do registration
-    ims[nanim] = 1
-    bg[nanbg] = 1
+    data = np.empty_like(images)
     
     if infoDict is not None:
         infoDict['diffAngle'] = []
         infoDict['diffScale'] = []
         infoDict['offset'] = []
     
-    for i, im in enumerate(ims):
+    for i, im in enumerate(images):
+        bg = background.copy()
+        # Replace nans to do registration
+        im[nanim[i]] = 1
+        bg[nanbg] = 1
+        
         # get angle scale and shift
         angle, scale, shift, __ = ir.register_images(im, bg)
     
@@ -199,8 +195,15 @@ def align(ims, bg, bgCoord=False, infoDict=None):
             infoDict['diffAngle'].append(angle)
             infoDict['diffScale'].append(scale)
             infoDict['offset'].append(shift)
+            
+            # resize if shape is not equal
+        if im.shape != bg.shape:
+            im, bg = same_size(im, bg)
+    
+        # subtract background
+        data[i] = im - bg
         
-    return ims, bg
+    return data
     
 def same_size(ims, bg):
     """Pad with nans to get similarely shaped matrix
@@ -223,11 +226,16 @@ def same_size(ims, bg):
     shape = [max(ims.shape[-2], bg.shape[-2]), 
              max(ims.shape[-1], bg.shape[-1])]
     
-    ims_out = np.empty((ims.shape[0], *shape)) * np.nan
-    ims_out[:, :ims.shape[-2], :ims.shape[-1]] = ims
+    imshape = np.array(np.shape(ims))
+    imshape[-2:] = shape
+    bgshape = np.array(np.shape(bg))
+    bgshape[-2:] = shape
     
-    bg_out = np.empty(shape) * np.nan
-    bg_out[:bg.shape[0], :bg.shape[1]] = bg
+    ims_out = np.empty(tuple(imshape)) * np.nan
+    ims_out[..., :ims.shape[-2], :ims.shape[-1]] = ims
+    
+    bg_out = np.empty(tuple(bgshape)) * np.nan
+    bg_out[..., :bg.shape[-2], :bg.shape[-1]] = bg
     
 #    ims = cv2.copyMakeBorder(ims, 0, shape[0] - ims.shape[0],
 #                             0, shape[1] - ims.shape[1],

@@ -38,7 +38,8 @@ warnings.filterwarnings('ignore', 'invalid value encountered in less',
 def remove_curve_background(im, bg, deg=2, *,
                             maskim=None, maskbg=None, infoDict=None,
                             bgCoord=False, percentile=None,
-                            reflatten=True):
+                            reflatten=True, use_bg_curve=False,
+                            correctScale=False):
     """flatten the image by removing the curve and the background fluorescence.
 
     Parameters
@@ -105,10 +106,14 @@ def remove_curve_background(im, bg, deg=2, *,
     if np.any(fbg <= 0):
         raise RuntimeError("Background mask too small")
 
-    im = im / fim
+    if use_bg_curve:
+        factor = (np.mean(fbg[maskim])/np.mean(fim[..., maskim], -1))
+        im = im / fbg * factor[..., np.newaxis, np.newaxis]
+    else:
+        im = im / fim
     bg = bg / fbg
     
-    data = align(im, bg, bgCoord, infoDict)
+    data = align(im, bg, bgCoord, infoDict, correctScale=correctScale)
 
     # Get mask to flatten data
     if reflatten:
@@ -157,7 +162,7 @@ def remove_curve_background(im, bg, deg=2, *,
             infoDict['offset'] = np.squeeze(infoDict['offset'])
     return data
 
-def align(images, background, bgCoord=False, infoDict=None):
+def align(images, background, bgCoord=False, infoDict=None, correctScale=True):
     # if the image has any nans (for fft)
     nanim = np.isnan(images)
     nanbg = np.isnan(background)
@@ -176,7 +181,8 @@ def align(images, background, bgCoord=False, infoDict=None):
         bg[nanbg] = 1
         
         # get angle scale and shift
-        angle, scale, shift, __ = ir.register_images(im, bg)
+        angle, scale, shift, __ = ir.register_images(im, bg, 
+                                                     correctScale=correctScale)
     
         # Reset the previously removed nans
         im[nanim[i]] = np.nan

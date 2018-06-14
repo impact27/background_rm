@@ -108,13 +108,17 @@ def remove_curve_background(im, bg, deg=2, *,
 
     if use_bg_curve:
         factor = (np.mean(fbg[maskim])/np.mean(fim[..., maskim], -1))
-        im = im / fbg * factor[..., np.newaxis, np.newaxis]
-    else:
-        im = im / fim
+        fim = fbg / factor[..., np.newaxis, np.newaxis]
+
+    if infoDict is not None:
+        infoDict['image_intensity'] = fim
+    
+    im = im / fim
     bg = bg / fbg
     
     data = align(im, bg, bgCoord, infoDict, correctScale=correctScale)
 
+    fdata = 1
     # Get mask to flatten data
     if reflatten:
         if twoPass:
@@ -126,8 +130,11 @@ def remove_curve_background(im, bg, deg=2, *,
             mask = maskim
         # Flatten data
         data += 1
-        data /= polyfit2d(data, deg, mask=mask)
+        fdata = polyfit2d(data, deg, mask=mask)
+        data /= fdata
         data -= 1
+        if infoDict is not None:
+            infoDict['image_intensity_reflatten'] = fdata
 
     
 
@@ -160,6 +167,11 @@ def remove_curve_background(im, bg, deg=2, *,
             infoDict['diffAngle'] = np.squeeze(infoDict['diffAngle'])
             infoDict['diffScale'] = np.squeeze(infoDict['diffScale'])
             infoDict['offset'] = np.squeeze(infoDict['offset'])
+            infoDict['image_intensity'] = np.squeeze(
+                    infoDict['image_intensity'])
+            infoDict['offset'] = np.squeeze(infoDict['offset'])
+            infoDict['image_intensity_reflatten'] = np.squeeze(
+                    infoDict['image_intensity_reflatten'])
     return data
 
 def align(images, background, bgCoord=False, infoDict=None, correctScale=True):

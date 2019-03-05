@@ -393,7 +393,7 @@ def signalMask(im, r=2, blur=False):
 
 
 #@profile
-def polyfit2d(ims, deg=2, *, x=None, y=None, mask=None):
+def polyfit2d(ims, deg=2, *, x=None, y=None, mask=None, getcoeffs=False):
     """Fit the function f to the degree deg
 
     Parameters
@@ -436,14 +436,22 @@ def polyfit2d(ims, deg=2, *, x=None, y=None, mask=None):
     vander, vandermasked, A = polyfit2d.LHS
     ret_array = np.zeros_like(ims)
     
+    coeffs = []
     for ret, im in zip(ret_array, ims):
         c = solvePolyFit2d(im, valid, vandermasked, A)
         # Multiply the coefficient with the vandermonde matrix
+        coeffs.append(c)
         for coeff, mat in zip(c, vander):
             ret += coeff * mat
     if squeeze:
         ret_array = np.squeeze(ret_array)
-    return ret_array
+        coeffs = coeffs[0]
+        
+    if not getcoeffs:
+        return ret_array
+    else:
+        return ret_array, coeffs
+    
 
 def getidx(y, x, deg=2):
     """helper function to order powers in psize
@@ -651,3 +659,84 @@ def getPeaks(im, nstd=6, maxsize=None):
     title(str(threshold))
     #"""
     return labels > 0
+
+
+def vandermatrix(shape, *, x=None, y=None, deg=2, mask=None,
+                 dtype='float32'):
+    """Fit the function f to the degree deg
+
+    Parameters
+    ----------
+    im: 2d array
+        The image to fit
+    x: 1d array
+        X position
+    y: 1d array
+        Y positions
+    deg: integer, default 2
+        The polynomial degree to fit
+    mask: 2d boolean array
+        Alternative to percentile, valid values
+    vanderOut: 2d array
+        Outpts vander matrix if requested
+
+    Returns
+    -------
+    im: 2d array
+        The fitted polynomial surface
+
+    Notes
+    -----
+    To do a least square of the image, we need to minimize sumOverPixels (SOP)
+    ((fit-image)**2)
+    Where fit is a function of C_ij:
+        fit=sum_ij(C_ij * y**i * x**j)
+
+    we define the Vandermonde matrix as follow:
+        V[i,j]=y**i * x**j
+
+    where x and y are meshgrid of the y and x index
+
+    So we want the derivate of SOP((fit-image)**2) relative to the C_ij
+    to be 0.
+
+        d/dCij SOP((fit-image)**2) = 0 = 2*SOP((fit-image)*d/dC_ij fit)
+
+    Therefore
+
+        SOP(sum_kl(C_kl * V[k+i,l+j]))=SOP(image*V[i,j])
+        sum_kl(C_kl * SOP(V[k+i,l+j]))=SOP(image*V[i,j])
+
+    Which is a simple matrix equation! A*C=B with A.size=(I+J)*(I+J),
+    C.size=B.size=I+J
+
+    The sizes of the matrices are only of the order of deg**4
+
+    The bottleneck is any operation on the images before the SOP
+    """
+    if x is None:
+        x = range(shape[1])
+    else:
+        assert(len(x) == shape[1])
+    if y is None:
+        y = range(shape[0])
+    else:
+        assert(len(y) == shape[0])
+    # get x,y
+    x = np.asarray(x, dtype=dtype)[np.newaxis, :]
+    y = np.asarray(y, dtype=dtype)[:, np.newaxis]
+
+    # Number of x and y power combinations
+    psize = ((deg + 1) * (deg + 2)) // 2
+    # vandermonde matrix
+    vander = np.empty((psize, *shape), dtype=dtype)
+    # Temp. matrix that will hold the current value of vandermonde
+    vtmp = np.empty(shape, dtype=dtype)
+
+
+    # First thing is to compute the vandermonde matrix
+    for yp in range(deg + 1):
+        for xp in range(deg + 1 - yp):
+            np.dot((y**yp), (x**xp), out=vtmp)
+            vander[getidx(yp, xp, deg), :, :] = vtmp
+    return vander
